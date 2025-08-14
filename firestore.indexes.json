@@ -1,0 +1,67 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "exercises",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "order", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "appVideos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "order", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "appAudios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "order", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "appArticles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "order", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "videos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "audios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "articles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isPublished", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    }
+  ]
+}
