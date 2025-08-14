@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { LogIn, Eye, EyeOff } from 'lucide-react';
@@ -10,8 +10,19 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, currentUser, isAdmin } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (currentUser) {
+      if (isAdmin) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
+  }, [currentUser, isAdmin, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,8 +30,8 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate('/');
+      const result = await login(email, password);
+      // The redirect will be handled by the useEffect hook
     } catch (error) {
       console.error('Login error:', error);
       setError('Email o password non corretti');
@@ -34,8 +45,8 @@ const LoginPage = () => {
     setGoogleLoading(true);
 
     try {
-      await loginWithGoogle();
-      navigate('/');
+      const result = await loginWithGoogle();
+      // The redirect will be handled by the useEffect hook
     } catch (error) {
       console.error('Google login error:', error);
       if (error.code === 'auth/popup-closed-by-user') {
