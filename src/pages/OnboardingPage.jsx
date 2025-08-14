@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CheckCircle, User, Target, Brain } from 'lucide-react';
 import { db } from '../config/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
 
 const OnboardingPage = () => {
   const navigate = useNavigate();
+  const { currentUser, userProfile } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [welcomeContent, setWelcomeContent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -75,28 +77,53 @@ const OnboardingPage = () => {
     }
   ];
 
+  const completeOnboarding = async () => {
+    try {
+      // Save to localStorage
+      localStorage.setItem('onboardingCompleted', 'true');
+      
+      // Save to Firestore if user is logged in
+      if (currentUser) {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          onboardingCompleted: true,
+          onboardingCompletedAt: new Date()
+        });
+      }
+      
+      // Navigate to exercises page
+      navigate('/exercises');
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      // Still navigate even if Firestore update fails
+      navigate('/exercises');
+    }
+  };
+
   const nextStep = () => {
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Segna l'onboarding come completato e vai alla home
-      localStorage.setItem('onboardingCompleted', 'true');
-      navigate('/exercises');
+      // Complete onboarding on last step
+      completeOnboarding();
     }
   };
 
   const skipOnboarding = () => {
-    localStorage.setItem('onboardingCompleted', 'true');
-    navigate('/exercises');
+    completeOnboarding();
   };
 
   // Controlla se l'onboarding è già stato completato
   useEffect(() => {
-    const onboardingCompleted = localStorage.getItem('onboardingCompleted');
-    if (onboardingCompleted === 'true') {
-      navigate('/exercises');
+    if (currentUser && userProfile) {
+      const localOnboarding = localStorage.getItem('onboardingCompleted');
+      const firestoreOnboarding = userProfile.onboardingCompleted;
+      
+      // If onboarding is completed in either place, redirect to exercises
+      if (localOnboarding === 'true' || firestoreOnboarding === true) {
+        navigate('/exercises');
+      }
     }
-  }, [navigate]);
+  }, [currentUser, userProfile, navigate]);
 
   if (loading) {
     return (

@@ -4,7 +4,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 const ProtectedRoute = ({ children, requireAuth = true }) => {
-  const { currentUser, loading } = useAuth();
+  const { currentUser, userProfile, isAdmin, loading } = useAuth();
   const onboardingCompleted = localStorage.getItem('onboardingCompleted');
   
   if (loading) {
@@ -19,8 +19,14 @@ const ProtectedRoute = ({ children, requireAuth = true }) => {
     return <Navigate to="/login" replace />;
   }
   
-  if (currentUser && onboardingCompleted !== 'true') {
-    return <Navigate to="/onboarding" replace />;
+  // Admin users skip onboarding
+  if (currentUser && !isAdmin) {
+    // Check both localStorage and userProfile for onboarding completion
+    const isOnboardingComplete = onboardingCompleted === 'true' || userProfile?.onboardingCompleted === true;
+    
+    if (!isOnboardingComplete) {
+      return <Navigate to="/onboarding" replace />;
+    }
   }
   
   return children;

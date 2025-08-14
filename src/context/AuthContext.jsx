@@ -96,6 +96,14 @@ export const AuthProvider = ({ children }) => {
         const profile = userDoc.data();
         setUserProfile(profile);
         setIsAdmin(profile.isAdmin === true || profile.email === 'ilgabrio@gmail.com');
+        
+        // Check if onboarding is completed and sync with localStorage
+        if (profile.onboardingCompleted === true) {
+          localStorage.setItem('onboardingCompleted', 'true');
+        } else {
+          localStorage.removeItem('onboardingCompleted');
+        }
+        
         return profile;
       }
     } catch (error) {
