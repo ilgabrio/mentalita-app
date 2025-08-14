@@ -10,20 +10,22 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Mentalità - Forza mentale per il tuo sport',
-        short_name: 'Mentalità',
-        description: 'Esercizi di mindfulness, meditazione e tecniche di rilassamento per atleti e sportivi',
+        name: 'Be Water Plus - Forza mentale per il tuo sport',
+        short_name: 'Be Water+',
+        description: 'Mental coaching per atleti - La tua forza mentale nello sport',
         theme_color: '#0085ff',
         background_color: '#111827',
         display: 'standalone',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
-            src: 'icon-192.png',
+            src: '/icon-192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'icon-512.png',
+            src: '/icon-512.png',
             sizes: '512x512',
             type: 'image/png'
           }
@@ -31,5 +33,5 @@ export default defineConfig({
       }
     })
   ],
-  base: '/mentalita-app/'
+  base: process.env.NODE_ENV === 'production' && process.env.DEPLOY_TARGET === 'github' ? '/mentalita-app/' : '/'
 })

@@ -19,12 +19,13 @@ import ArticlesPage from './pages/ArticlesPage';
 import ExerciseDetail from './components/ExerciseDetail';
 import OnboardingPage from './pages/OnboardingPage';
 import AdminPage from './pages/AdminPage';
+import ProfilePage from './pages/ProfilePage';
 import MainLayout from './components/MainLayout';
 
 function App() {
   return (
     <ThemeProvider>
-      <Router basename="/mentalita-app">
+      <Router basename={process.env.NODE_ENV === 'production' && process.env.DEPLOY_TARGET === 'github' ? '/mentalita-app' : ''}>
         <MainLayout>
           <Routes>
             <Route path="/" element={<Navigate to="/onboarding" replace />} />
@@ -38,7 +39,7 @@ function App() {
             <Route path="/audio/:id" element={<ProtectedRoute><div className="p-4 text-center"><h2 className="text-xl font-bold text-gray-900 dark:text-white">Audio Player</h2></div></ProtectedRoute>} />
             <Route path="/articles" element={<ProtectedRoute><ArticlesPage /></ProtectedRoute>} />
             <Route path="/articles/:id" element={<ProtectedRoute><div className="p-4 text-center"><h2 className="text-xl font-bold text-gray-900 dark:text-white">Articolo</h2></div></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><div className="p-4 text-center"><h2 className="text-xl font-bold text-gray-900 dark:text-white">Profilo</h2></div></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><div className="p-4 text-center"><h2 className="text-xl font-bold text-gray-900 dark:text-white">Impostazioni</h2></div></ProtectedRoute>} />
             <Route path="/admin" element={<AdminPage />} />
           </Routes>
