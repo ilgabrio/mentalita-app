@@ -24,8 +24,11 @@ import {
   Trophy,
   Clock,
   Target,
-  BookOpen
+  BookOpen,
+  Settings,
+  FileEdit
 } from 'lucide-react';
+import ExerciseFormEditor from './ExerciseFormEditor';
 
 const ExerciseManager = () => {
   const [exercises, setExercises] = useState([]);
@@ -36,6 +39,8 @@ const ExerciseManager = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingExercise, setEditingExercise] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showFormEditor, setShowFormEditor] = useState(false);
+  const [editingFormExercise, setEditingFormExercise] = useState(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -71,16 +76,35 @@ const ExerciseManager = () => {
   const fetchExercises = async () => {
     try {
       setLoading(true);
-      const exercisesQuery = query(
-        collection(db, 'exercises'),
-        orderBy('order', 'asc')
-      );
+      console.log('🔧 ADMIN - Caricamento esercizi...');
       
+      // Carica TUTTI gli esercizi - non usiamo più orderBy che fallisce
+      console.log('📋 ADMIN - Carico tutti gli esercizi dalla collezione...');
+      
+      const exercisesQuery = query(collection(db, 'exercises'));
       const snapshot = await getDocs(exercisesQuery);
-      const exercisesData = snapshot.docs.map(doc => ({
+      let exercisesData = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+      
+      console.log('📊 ADMIN - Esercizi totali caricati:', exercisesData.length);
+      
+      // Ordina gli esercizi manualmente
+      exercisesData.sort((a, b) => {
+        // Se hanno order, usa quello
+        if (a.order !== undefined && b.order !== undefined) {
+          return a.order - b.order;
+        }
+        // Altrimenti per data di creazione (più recenti prima)
+        if (a.createdAt && b.createdAt) {
+          return b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime();
+        }
+        // Infine per titolo alfabetico
+        return (a.title || '').localeCompare(b.title || '');
+      });
+      
+      console.log('✅ ADMIN - Esercizi ordinati pronti per visualizzazione');
       
       setExercises(exercisesData);
     } catch (error) {
@@ -176,6 +200,7 @@ const ExerciseManager = () => {
       } else {
         await addDoc(collection(db, 'exercises'), {
           ...exerciseData,
+          elements: [], // Inizializza con array vuoto per permettere l'editing
           createdAt: new Date()
         });
       }
@@ -233,6 +258,23 @@ const ExerciseManager = () => {
       ...prev,
       [field]: prev[field].filter((_, i) => i !== index)
     }));
+  };
+
+  const openFormEditor = (exercise) => {
+    setEditingFormExercise(exercise);
+    setShowFormEditor(true);
+  };
+
+  const closeFormEditor = () => {
+    setShowFormEditor(false);
+    setEditingFormExercise(null);
+  };
+
+  const handleFormEditorSave = (updatedExercise) => {
+    // Aggiorna l'esercizio nella lista locale
+    setExercises(prev => 
+      prev.map(ex => ex.id === updatedExercise.id ? updatedExercise : ex)
+    );
   };
 
   if (loading) {
@@ -398,6 +440,13 @@ const ExerciseManager = () => {
                     title={exercise.isPublished ? 'Rimuovi pubblicazione' : 'Pubblica'}
                   >
                     <Eye className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => openFormEditor(exercise)}
+                    className="p-2 text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors"
+                    title="Modifica Elementi Form"
+                  >
+                    <FileEdit className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => openModal(exercise)}
@@ -580,6 +629,15 @@ const ExerciseManager = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Exercise Form Editor */}
+      {showFormEditor && editingFormExercise && (
+        <ExerciseFormEditor
+          exercise={editingFormExercise}
+          onClose={closeFormEditor}
+          onSave={handleFormEditorSave}
+        />
       )}
     </div>
   );

@@ -14,11 +14,12 @@ const ArticlesPage = () => {
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        // Prova dalla collezione appArticles
+        // Leggi dalla collezione VERA: articles
+        console.log('Caricamento articoli da Firebase...');
         let q = query(
-          collection(db, 'appArticles'), 
+          collection(db, 'articles'), 
           where('isPublished', '==', true),
-          orderBy('order', 'asc')
+          orderBy('publishedAt', 'desc')
         );
         
         let querySnapshot = await getDocs(q);
@@ -27,20 +28,8 @@ const ArticlesPage = () => {
         querySnapshot.forEach((doc) => {
           articlesData.push({ id: doc.id, ...doc.data() });
         });
-
-        // Se non ci sono risultati, prova dalla collezione articles
-        if (articlesData.length === 0) {
-          q = query(
-            collection(db, 'articles'), 
-            where('isPublished', '==', true),
-            orderBy('createdAt', 'desc')
-          );
-          
-          querySnapshot = await getDocs(q);
-          querySnapshot.forEach((doc) => {
-            articlesData.push({ id: doc.id, ...doc.data() });
-          });
-        }
+        
+        console.log('Articoli trovati:', articlesData.length);
 
         // Se ancora non ci sono dati, usa dati mock
         if (articlesData.length === 0) {

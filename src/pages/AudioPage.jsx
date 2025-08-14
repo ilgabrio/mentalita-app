@@ -14,11 +14,12 @@ const AudioPage = () => {
   useEffect(() => {
     const fetchAudios = async () => {
       try {
-        // Prova dalla collezione appAudios
+        // Leggi dalla collezione VERA: audioContent
+        console.log('Caricamento audio da Firebase...');
         let q = query(
-          collection(db, 'appAudios'), 
+          collection(db, 'audioContent'), 
           where('isPublished', '==', true),
-          orderBy('order', 'asc')
+          orderBy('createdAt', 'desc')
         );
         
         let querySnapshot = await getDocs(q);
@@ -27,20 +28,8 @@ const AudioPage = () => {
         querySnapshot.forEach((doc) => {
           audiosData.push({ id: doc.id, ...doc.data() });
         });
-
-        // Se non ci sono risultati, prova dalla collezione audios
-        if (audiosData.length === 0) {
-          q = query(
-            collection(db, 'audios'), 
-            where('isPublished', '==', true),
-            orderBy('createdAt', 'desc')
-          );
-          
-          querySnapshot = await getDocs(q);
-          querySnapshot.forEach((doc) => {
-            audiosData.push({ id: doc.id, ...doc.data() });
-          });
-        }
+        
+        console.log('Audio trovati:', audiosData.length);
 
         // Se ancora non ci sono dati, usa dati mock
         if (audiosData.length === 0) {

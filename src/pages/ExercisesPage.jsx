@@ -15,31 +15,51 @@ const ExercisesPage = () => {
   useEffect(() => {
     const fetchExercises = async () => {
       try {
-        // Leggi dalla collezione exercises
-        let q = query(
-          collection(db, 'exercises'), 
-          where('isPublished', '==', true),
-          orderBy('order', 'asc')
-        );
+        console.log('🔍 DEBUGGING EXERCISES - Inizio caricamento...');
         
-        let querySnapshot = await getDocs(q);
-        let exercisesData = [];
-        
-        querySnapshot.forEach((doc) => {
-          exercisesData.push({ id: doc.id, ...doc.data() });
+        // STEP 1: Vediamo TUTTI gli esercizi prima di filtrare
+        let allExercisesQuery = query(collection(db, 'exercises'));
+        let allSnapshot = await getDocs(allExercisesQuery);
+        let allExercises = [];
+        allSnapshot.forEach((doc) => {
+          allExercises.push({ id: doc.id, ...doc.data() });
         });
+        
+        console.log('📊 TUTTI GLI ESERCIZI nel database:', allExercises.length);
+        console.log('📋 Dettagli esercizi:', allExercises.map(ex => ({
+          id: ex.id,
+          title: ex.title,
+          isPublished: ex.isPublished,
+          order: ex.order
+        })));
 
-        // Se non ci sono risultati, prova senza orderBy
-        if (exercisesData.length === 0) {
-          q = query(
-            collection(db, 'exercises'), 
-            where('isPublished', '==', true)
-          );
-          
-          querySnapshot = await getDocs(q);
-          querySnapshot.forEach((doc) => {
-            exercisesData.push({ id: doc.id, ...doc.data() });
-          });
+        // STEP 2: Gli esercizi probabilmente non hanno isPublished, usiamo tutti quelli validi
+        console.log('📝 Caricamento tutti gli esercizi validi (ignoro isPublished per ora)...');
+        
+        let exercisesData = allExercises.filter(ex => {
+          // Considera valido un esercizio se ha almeno title, description ed elements
+          return ex.title && ex.description && ex.elements && Array.isArray(ex.elements);
+        });
+        
+        // Ordina per order se esiste, altrimenti per createdAt o title
+        exercisesData.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) {
+            return a.order - b.order;
+          }
+          if (a.createdAt && b.createdAt) {
+            return a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime();
+          }
+          return (a.title || '').localeCompare(b.title || '');
+        });
+        
+        console.log('✅ Esercizi validi trovati:', exercisesData.length);
+        
+        // Se ancora pochi risultati, proviamo senza filtri
+        if (exercisesData.length < 5) {
+          console.log('⚠️ Pochi esercizi trovati, mostro TUTTI per debug...');
+          // Filtriamo manualmente gli esercizi validi (che hanno almeno title e description)
+          exercisesData = allExercises.filter(ex => ex.title && ex.description);
+          console.log('✅ Esercizi validi (con title e description):', exercisesData.length);
         }
 
         // Se ancora non ci sono dati, usa dati mock

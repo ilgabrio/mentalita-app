@@ -95,7 +95,14 @@ export const AuthProvider = ({ children }) => {
       if (userDoc.exists()) {
         const profile = userDoc.data();
         setUserProfile(profile);
-        setIsAdmin(profile.isAdmin === true || profile.email === 'ilgabrio@gmail.com');
+        const adminStatus = profile.isAdmin === true || profile.email === 'ilgabrio@gmail.com';
+        console.log('DEBUG Admin check:', {
+          email: profile.email,
+          isAdminField: profile.isAdmin,
+          isHardcodedAdmin: profile.email === 'ilgabrio@gmail.com',
+          finalAdminStatus: adminStatus
+        });
+        setIsAdmin(adminStatus);
         
         // Check if onboarding is completed and sync with localStorage
         if (profile.onboardingCompleted === true) {
@@ -117,6 +124,12 @@ export const AuthProvider = ({ children }) => {
       setCurrentUser(user);
       
       if (user) {
+        // CONTROLLO IMMEDIATO per admin hardcoded
+        if (user.email === 'ilgabrio@gmail.com') {
+          console.log('ADMIN HARDCODED RICONOSCIUTO:', user.email);
+          setIsAdmin(true);
+        }
+        
         await fetchUserProfile(user.uid);
       } else {
         setUserProfile(null);

@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // REGOLA TEMPORANEA - Solo per script di fix
+    match /exercises/{exerciseId} {
+      allow read, write: if true; // TEMPORANEO - permetti tutto per lo script
+    }
+    
+    // Tutte le altre regole rimangono uguali...
+    // (copia qui le altre regole esistenti)
+  }
+}

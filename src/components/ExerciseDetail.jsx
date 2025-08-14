@@ -16,20 +16,18 @@ const ExerciseDetail = () => {
   useEffect(() => {
     const fetchExercise = async () => {
       try {
-        // Prova prima dalla collezione appVideos
-        let docRef = doc(db, 'appVideos', id);
-        let docSnap = await getDoc(docRef);
+        console.log('🔍 Caricamento esercizio con ID:', id);
         
-        if (!docSnap.exists()) {
-          // Se non trovato, prova dalla collezione videos
-          docRef = doc(db, 'videos', id);
-          docSnap = await getDoc(docRef);
-        }
+        // Carica dalla collezione exercises
+        const docRef = doc(db, 'exercises', id);
+        const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
           const data = { id: docSnap.id, ...docSnap.data() };
+          console.log('✅ Esercizio trovato:', data);
           setExercise(data);
         } else {
+          console.log('❌ Esercizio non trovato con ID:', id);
           // Dati mock per testing
           setExercise({
             id: id,
@@ -38,7 +36,8 @@ const ExerciseDetail = () => {
             longDescription: "È tempo di abbracciare una verità liberatoria: l'errore che hai commesso ieri è irripetibile. Non potrai mai commettere esattamente lo stesso errore, perché ogni tentativo è unico, con condizioni fis...",
             youtubeUrl: "https://www.youtube.com/embed/VIDEO_ID",
             category: "Mentalità",
-            readMoreText: "Leggi l'articolo completo"
+            readMoreText: "Leggi l'articolo completo",
+            elements: []
           });
         }
       } catch (error) {
@@ -50,7 +49,8 @@ const ExerciseDetail = () => {
           longDescription: "È tempo di abbracciare una verità liberatoria: l'errore che hai commesso ieri è irripetibile. Non potrai mai commettere esattamente lo stesso errore, perché ogni tentativo è unico, con condizioni fis...",
           youtubeUrl: "https://www.youtube.com/embed/VIDEO_ID",
           category: "Mentalità",
-          readMoreText: "Leggi l'articolo completo"
+          readMoreText: "Leggi l'articolo completo",
+          elements: []
         });
       } finally {
         setLoading(false);

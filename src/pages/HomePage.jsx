@@ -10,6 +10,7 @@ const HomePage = () => {
   useEffect(() => {
     // If user is admin, redirect to admin dashboard
     if (currentUser && isAdmin) {
+      console.log('Admin rilevato, redirect a /admin');
       navigate('/admin', { replace: true });
       return;
     }

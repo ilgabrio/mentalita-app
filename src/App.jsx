@@ -3,9 +3,17 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-const ProtectedRoute = ({ children, requireAuth = true }) => {
+const ProtectedRoute = ({ children, requireAuth = true, skipOnboardingCheck = false }) => {
   const { currentUser, userProfile, isAdmin, loading } = useAuth();
   const onboardingCompleted = localStorage.getItem('onboardingCompleted');
+  
+  console.log('ProtectedRoute DEBUG:', { 
+    currentUser: currentUser?.email, 
+    isAdmin, 
+    userProfile, 
+    skipOnboardingCheck,
+    onboardingCompleted 
+  });
   
   if (loading) {
     return (
@@ -19,8 +27,8 @@ const ProtectedRoute = ({ children, requireAuth = true }) => {
     return <Navigate to="/login" replace />;
   }
   
-  // Admin users skip onboarding
-  if (currentUser && !isAdmin) {
+  // Skip onboarding check for the onboarding page itself!
+  if (!skipOnboardingCheck && currentUser && !isAdmin) {
     // Check both localStorage and userProfile for onboarding completion
     const isOnboardingComplete = onboardingCompleted === 'true' || userProfile?.onboardingCompleted === true;
     
@@ -55,14 +63,16 @@ const AdminRoute = ({ children }) => {
 };
 
 import HomePage from './pages/HomePage';
-import ExercisesPage from './pages/ExercisesPage';
-import VideosPage from './pages/VideosPage';
-import AudioPage from './pages/AudioPage';
-import ArticlesPage from './pages/ArticlesPage';
+import ExercisesWorkspacePage from './pages/ExercisesWorkspacePage';
+import VideosWorkspacePage from './pages/VideosWorkspacePage';
+import AudioWorkspacePage from './pages/AudioWorkspacePage';
+import ArticlesWorkspacePage from './pages/ArticlesWorkspacePage';
 import ExerciseDetail from './components/ExerciseDetail';
+import ExercisePracticePage from './pages/ExercisePracticePage';
 import OnboardingPage from './pages/OnboardingPage';
 import AdminPage from './pages/AdminPage';
 import ProfilePage from './pages/ProfilePage';
+import PremiumPage from './pages/PremiumPage';
 import LoginPage from './pages/LoginPage';
 import MainLayout from './components/MainLayout';
 
@@ -73,7 +83,11 @@ function App() {
         <Router basename={process.env.NODE_ENV === 'production' && process.env.DEPLOY_TARGET === 'github' ? '/mentalita-app' : ''}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/onboarding" element={<ProtectedRoute requireAuth={true}><OnboardingPage /></ProtectedRoute>} />
+            <Route path="/onboarding" element={
+              <ProtectedRoute requireAuth={true} skipOnboardingCheck={true}>
+                <OnboardingPage />
+              </ProtectedRoute>
+            } />
             <Route path="/" element={
               <MainLayout>
                 <ProtectedRoute><HomePage /></ProtectedRoute>
@@ -81,7 +95,7 @@ function App() {
             } />
             <Route path="/exercises" element={
               <MainLayout>
-                <ProtectedRoute><ExercisesPage /></ProtectedRoute>
+                <ProtectedRoute><ExercisesWorkspacePage /></ProtectedRoute>
               </MainLayout>
             } />
             <Route path="/exercises/:id" element={
@@ -90,13 +104,11 @@ function App() {
               </MainLayout>
             } />
             <Route path="/exercises/:id/practice" element={
-              <MainLayout>
-                <ProtectedRoute><ExerciseDetail /></ProtectedRoute>
-              </MainLayout>
+              <ProtectedRoute><ExercisePracticePage /></ProtectedRoute>
             } />
             <Route path="/videos" element={
               <MainLayout>
-                <ProtectedRoute><VideosPage /></ProtectedRoute>
+                <ProtectedRoute><VideosWorkspacePage /></ProtectedRoute>
               </MainLayout>
             } />
             <Route path="/videos/:id" element={
@@ -110,7 +122,7 @@ function App() {
             } />
             <Route path="/audio" element={
               <MainLayout>
-                <ProtectedRoute><AudioPage /></ProtectedRoute>
+                <ProtectedRoute><AudioWorkspacePage /></ProtectedRoute>
               </MainLayout>
             } />
             <Route path="/audio/:id" element={
@@ -124,7 +136,7 @@ function App() {
             } />
             <Route path="/articles" element={
               <MainLayout>
-                <ProtectedRoute><ArticlesPage /></ProtectedRoute>
+                <ProtectedRoute><ArticlesWorkspacePage /></ProtectedRoute>
               </MainLayout>
             } />
             <Route path="/articles/:id" element={
@@ -139,6 +151,11 @@ function App() {
             <Route path="/profile" element={
               <MainLayout>
                 <ProtectedRoute><ProfilePage /></ProtectedRoute>
+              </MainLayout>
+            } />
+            <Route path="/premium" element={
+              <MainLayout>
+                <ProtectedRoute><PremiumPage /></ProtectedRoute>
               </MainLayout>
             } />
             <Route path="/settings" element={

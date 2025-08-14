@@ -9,9 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "deploy": "npm run build && firebase deploy",
-    "firebase:emulator": "firebase emulators:start"
+    "firebase:emulator": "firebase emulators:start",
+    "fix-exercises": "node scripts/fix-exercises.js"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "firebase": "^12.1.0",
     "lucide-react": "^0.539.0",
     "react": "^19.1.1",

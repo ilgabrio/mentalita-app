@@ -195,7 +195,7 @@ const AdminDashboard = () => {
       {/* Sidebar */}
       <div className="w-64 bg-white dark:bg-gray-800 shadow-lg">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Crown className="h-6 w-6 text-yellow-500" />
               <span className="text-lg font-bold text-gray-900 dark:text-white">
@@ -209,6 +209,41 @@ const AdminDashboard = () => {
             >
               <ArrowLeft className="h-5 w-5 text-gray-500 dark:text-gray-400" />
             </button>
+          </div>
+          
+          {/* Quick Navigation to User Pages */}
+          <div className="space-y-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">Vista Utente:</p>
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                onClick={() => navigate('/exercises')}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30"
+              >
+                <Trophy className="h-3 w-3" />
+                Esercizi
+              </button>
+              <button
+                onClick={() => navigate('/videos')}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-100 dark:hover:bg-red-900/30"
+              >
+                <Play className="h-3 w-3" />
+                Video
+              </button>
+              <button
+                onClick={() => navigate('/articles')}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded hover:bg-green-100 dark:hover:bg-green-900/30"
+              >
+                <FileText className="h-3 w-3" />
+                Articoli
+              </button>
+              <button
+                onClick={() => navigate('/audio')}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded hover:bg-purple-100 dark:hover:bg-purple-900/30"
+              >
+                <Volume2 className="h-3 w-3" />
+                Audio
+              </button>
+            </div>
           </div>
         </div>
 

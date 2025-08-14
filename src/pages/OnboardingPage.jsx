@@ -2,64 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, CheckCircle, User, Target, Brain } from 'lucide-react';
 import { db } from '../config/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
 const OnboardingPage = () => {
+  console.log('OnboardingPage component rendering...');
   const navigate = useNavigate();
   const { currentUser, userProfile } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [welcomeContent, setWelcomeContent] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  console.log('OnboardingPage state:', { currentStep, welcomeContent, loading, currentUser });
 
   useEffect(() => {
-    const fetchWelcomeContent = async () => {
-      try {
-        const docRef = doc(db, 'appSettings', 'welcome');
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          setWelcomeContent(docSnap.data());
-        } else {
-          // Contenuto di default se non configurato dall'admin
-          setWelcomeContent({
-            title: 'Benvenuto in Be Water Plus',
-            subtitle: 'La tua forza mentale nello sport',
-            description: 'Scopri tecniche di mindfulness, meditazione e mental coaching specificamente progettate per atleti come te.',
-            steps: [
-              {
-                icon: 'User',
-                title: 'Crea il tuo profilo',
-                description: 'Personalizza la tua esperienza con i tuoi obiettivi sportivi'
-              },
-              {
-                icon: 'Brain',
-                title: 'Allena la mente',
-                description: 'Accedi a esercizi di mindfulness e tecniche di rilassamento'
-              },
-              {
-                icon: 'Target',
-                title: 'Raggiungi i tuoi obiettivi',
-                description: 'Monitora i progressi e migliora le tue performance'
-              }
-            ]
-          });
-        }
-      } catch (error) {
-        console.error('Errore nel caricamento contenuto benvenuto:', error);
-        // Fallback content
-        setWelcomeContent({
-          title: 'Benvenuto in Be Water Plus',
-          subtitle: 'La tua forza mentale nello sport',
-          description: 'Inizia il tuo percorso di crescita mentale.',
-          steps: []
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchWelcomeContent();
+    console.log('OnboardingPage useEffect eseguito!');
+    
+    // CONTENUTO STATICO - niente Firebase per ora
+    setWelcomeContent({
+      title: 'Benvenuto in Mentalità',
+      subtitle: 'Forza mentale per il tuo sport',
+      description: 'Scopri come sviluppare la tua forza mentale e raggiungere i tuoi obiettivi sportivi.',
+      steps: [
+        { icon: 'User', title: 'Profilo Personale', description: 'Crea il tuo profilo atleta personalizzato' },
+        { icon: 'Brain', title: 'Obiettivi Mentali', description: 'Definisci i tuoi obiettivi di crescita mentale' },
+        { icon: 'Target', title: 'Piano di Allenamento', description: 'Scopri gli esercizi perfetti per te' }
+      ]
+    });
+    
+    setLoading(false);
+    console.log('OnboardingPage caricamento completato!');
   }, []);
 
   const steps = [
