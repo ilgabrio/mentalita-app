@@ -4,7 +4,9 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
@@ -27,6 +29,30 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     return await signInWithEmailAndPassword(auth, email, password);
+  };
+
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    // Check if user profile already exists
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    
+    if (!userDoc.exists()) {
+      // Create user profile if it doesn't exist
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        uid: user.uid,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        createdAt: new Date(),
+        provider: 'google',
+        isAdmin: user.email === 'ilgabrio@gmail.com'
+      });
+    }
+
+    return result;
   };
 
   const register = async (email, password, userData = {}) => {
@@ -100,6 +126,7 @@ export const AuthProvider = ({ children }) => {
     userProfile,
     isAdmin,
     login,
+    loginWithGoogle,
     register,
     logout,
     resetPassword,
