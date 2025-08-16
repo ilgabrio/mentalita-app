@@ -1,0 +1,102 @@
+// Aggiungi queste regole alle tue Firestore Security Rules esistenti
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Regole esistenti per users, exercises, etc...
+    
+    // NUOVE REGOLE PER LE FUNZIONALITÀ IMPLEMENTATE:
+    
+    // Onboarding Pages - solo admin possono scrivere, tutti possono leggere
+    match /onboardingPages/{document} {
+      allow read: if true; // Tutti possono leggere le pagine di onboarding
+      allow write: if request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // Questionnaire Templates - solo admin possono gestire
+    match /questionnaireTemplates/{document} {
+      allow read, write: if request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // Questionnaire Questions - solo admin possono gestire
+    match /questionnaireQuestions/{document} {
+      allow read, write: if request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // User Questionnaires - utenti possono scrivere i propri, admin possono leggere tutti
+    match /questionnaires/{document} {
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Premium Requests - utenti possono creare, admin possono gestire
+    match /premiumRequests/{document} {
+      allow read, write: if request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+      allow create: if request.auth != null; // Tutti gli utenti autenticati possono fare richieste premium
+    }
+    
+    // User subcollections per questionnaires
+    match /users/{userId}/questionnaires/{questionnaireId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // Exercise Sessions - per lo storico esercizi
+    match /exerciseSessions/{document} {
+      allow read, write: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // User Stats
+    match /userStats/{userId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // User Progress
+    match /userProgress/{userId} {
+      allow read, write: if request.auth != null && 
+        (request.auth.uid == userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // User Badges
+    match /userBadges/{document} {
+      allow read: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+      allow write: if request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // Motivational Tips
+    match /motivationalTips/{document} {
+      allow read: if request.auth != null; // Tutti possono leggere
+      allow write: if request.auth != null && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+  }
+}

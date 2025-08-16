@@ -36,6 +36,9 @@ const PremiumPage = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [userSubscription, setUserSubscription] = useState(null);
+  const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
+  const [questionnaireData, setQuestionnaireData] = useState({});
+  const [currentQuestion, setCurrentQuestion] = useState(0);
 
   // Piani predefiniti se non ci sono nel database
   const defaultPlans = [
@@ -118,10 +121,23 @@ const PremiumPage = () => {
   const fetchPlans = async () => {
     try {
       setLoading(true);
-      const plansQuery = query(
-        collection(db, 'premiumPlans'),
-        orderBy('monthlyPrice', 'asc')
-      );
+      
+      // Prima prova con l'ordinamento per ordine, poi per prezzo
+      let plansQuery;
+      try {
+        plansQuery = query(
+          collection(db, 'premiumPlans'),
+          where('isActive', '==', true),
+          orderBy('order', 'asc')
+        );
+      } catch (orderError) {
+        // Fallback senza ordinamento se l'indice non esiste
+        plansQuery = query(
+          collection(db, 'premiumPlans'),
+          where('isActive', '==', true)
+        );
+      }
+      
       const snapshot = await getDocs(plansQuery);
       
       if (snapshot.empty) {
@@ -132,11 +148,37 @@ const PremiumPage = () => {
           id: doc.id,
           ...doc.data()
         }));
-        setPlans(plansData);
+        
+        // Ordina manualmente se non c'era ordinamento nella query
+        const sortedPlans = plansData.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) {
+            return a.order - b.order;
+          }
+          return (a.monthlyPrice || 0) - (b.monthlyPrice || 0);
+        });
+        
+        setPlans(sortedPlans);
       }
     } catch (error) {
       console.error('Error loading plans:', error);
-      setPlans(defaultPlans);
+      // Fallback finale senza filtri
+      try {
+        const fallbackQuery = query(collection(db, 'premiumPlans'));
+        const snapshot = await getDocs(fallbackQuery);
+        if (!snapshot.empty) {
+          const plansData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          const activePlans = plansData.filter(plan => plan.isActive !== false);
+          setPlans(activePlans.length > 0 ? activePlans : defaultPlans);
+        } else {
+          setPlans(defaultPlans);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback query failed:', fallbackError);
+        setPlans(defaultPlans);
+      }
     } finally {
       setLoading(false);
     }
@@ -159,6 +201,39 @@ const PremiumPage = () => {
     }
   };
 
+  const premiumQuestions = [
+    {
+      id: 'sport',
+      question: 'Qual è il tuo sport principale?',
+      type: 'text',
+      placeholder: 'es. Calcio, Tennis, Nuoto...'
+    },
+    {
+      id: 'level',
+      question: 'A che livello pratichi il tuo sport?',
+      type: 'select',
+      options: ['Amatoriale', 'Semi-professionista', 'Professionista', 'Giovanile/Academy']
+    },
+    {
+      id: 'goals',
+      question: 'Quali sono i tuoi obiettivi principali?',
+      type: 'textarea',
+      placeholder: 'Descrivi cosa vorresti migliorare...'
+    },
+    {
+      id: 'challenges',
+      question: 'Quali sfide mentali stai affrontando?',
+      type: 'textarea',
+      placeholder: 'es. Ansia pre-gara, concentrazione, motivazione...'
+    },
+    {
+      id: 'commitment',
+      question: 'Quanto tempo puoi dedicare al training mentale ogni giorno?',
+      type: 'select',
+      options: ['10-15 minuti', '15-30 minuti', '30-60 minuti', 'Più di 60 minuti']
+    }
+  ];
+
   const handleSelectPlan = async (plan) => {
     if (!currentUser) {
       navigate('/login');
@@ -173,23 +248,53 @@ const PremiumPage = () => {
 
     setSelectedPlan(plan);
     
-    // Aggiungi richiesta premium
+    // Per il piano Gold, mostra direttamente il messaggio del colloquio
+    if (plan.name?.toLowerCase().includes('gold') || plan.name?.toLowerCase().includes('elite')) {
+      try {
+        await addDoc(collection(db, 'premiumRequests'), {
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          planId: plan.id,
+          planName: plan.name,
+          billingPeriod: billingPeriod,
+          price: billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
+          status: 'pending_interview',
+          requiresInterview: true,
+          createdAt: new Date()
+        });
+
+        alert(`🎯 Piano ${plan.name} - Richiesta Inviata!\n\nIl piano Gold prevede un colloquio personalizzato per creare il tuo percorso su misura.\n\nVerrai contattato entro 24 ore per fissare il colloquio conoscitivo.\n\nDurante il colloquio definiremo insieme:\n• I tuoi obiettivi specifici\n• Il percorso personalizzato\n• Le sessioni di coaching 1-on-1`);
+      } catch (error) {
+        console.error('Error creating gold request:', error);
+        alert('Errore nella richiesta. Riprova più tardi.');
+      }
+    } else {
+      // Per il piano Premium, mostra il questionario
+      setShowQuestionnaireModal(true);
+      setCurrentQuestion(0);
+      setQuestionnaireData({});
+    }
+  };
+
+  const handleQuestionnaireSubmit = async () => {
     try {
       await addDoc(collection(db, 'premiumRequests'), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
-        planId: plan.id,
-        planName: plan.name,
+        planId: selectedPlan.id,
+        planName: selectedPlan.name,
         billingPeriod: billingPeriod,
-        price: billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
-        status: 'pending',
+        price: billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice,
+        status: 'pending_approval',
+        questionnaireResponses: questionnaireData,
         createdAt: new Date()
       });
 
-      alert(`Richiesta per il piano ${plan.name} inviata! Verrai contattato a breve per completare il pagamento.`);
+      setShowQuestionnaireModal(false);
+      alert(`✅ Richiesta Piano ${selectedPlan.name} Completata!\n\nLe tue risposte sono state inviate per l'approvazione.\n\nRiceverai una risposta entro 24 ore con:\n• Conferma dell'attivazione\n• Istruzioni per il pagamento\n• Accesso ai contenuti Premium`);
     } catch (error) {
-      console.error('Error creating premium request:', error);
-      alert('Errore nella richiesta. Riprova più tardi.');
+      console.error('Error submitting questionnaire:', error);
+      alert('Errore nell\'invio del questionario. Riprova più tardi.');
     }
   };
 
@@ -227,9 +332,19 @@ const PremiumPage = () => {
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
               Sblocca il Tuo Potenziale Mentale
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
+            <p className="text-xl text-gray-600 dark:text-gray-300 mb-4 max-w-3xl mx-auto">
               Scegli il piano che fa per te e porta le tue prestazioni sportive al livello successivo
             </p>
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 max-w-4xl mx-auto">
+              <div className="flex items-start space-x-3">
+                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <p className="font-semibold mb-1">Come funziona l'iscrizione:</p>
+                  <p><strong>Piano Premium:</strong> Compila un breve questionario per personalizzare il tuo percorso, poi riceverai l'approvazione entro 24 ore</p>
+                  <p><strong>Piano Gold:</strong> Prenota un colloquio conoscitivo personalizzato per creare insieme il percorso di coaching su misura</p>
+                </div>
+              </div>
+            </div>
             
             {/* Billing Toggle */}
             <div className="flex items-center justify-center mb-8">
@@ -352,7 +467,14 @@ const PremiumPage = () => {
                         : 'bg-gray-500 text-white hover:bg-gray-600'
                     }`}
                   >
-                    {isCurrentPlan ? 'Piano Attuale' : price === 0 ? 'Inizia Gratis' : 'Scegli Questo Piano'}
+                    {isCurrentPlan 
+                      ? 'Piano Attuale' 
+                      : price === 0 
+                        ? 'Inizia Gratis' 
+                        : plan.name?.toLowerCase().includes('gold') || plan.name?.toLowerCase().includes('elite')
+                          ? 'Prenota Colloquio'
+                          : 'Compila Questionario'
+                    }
                   </button>
                 </div>
               </div>
@@ -458,6 +580,122 @@ const PremiumPage = () => {
           </button>
         </div>
       </div>
+
+      {/* Questionnaire Modal for Premium Plan */}
+      {showQuestionnaireModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    Questionario Premium
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-300 mt-1">
+                    Aiutaci a personalizzare il tuo percorso
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowQuestionnaireModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="mt-4">
+                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
+                  <span>Domanda {currentQuestion + 1} di {premiumQuestions.length}</span>
+                  <span>{Math.round(((currentQuestion + 1) / premiumQuestions.length) * 100)}% completato</span>
+                </div>
+                <div className="mt-2 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
+                    style={{ width: `${((currentQuestion + 1) / premiumQuestions.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  {premiumQuestions[currentQuestion].question}
+                </h3>
+                
+                {premiumQuestions[currentQuestion].type === 'text' && (
+                  <input
+                    type="text"
+                    value={questionnaireData[premiumQuestions[currentQuestion].id] || ''}
+                    onChange={(e) => setQuestionnaireData(prev => ({
+                      ...prev,
+                      [premiumQuestions[currentQuestion].id]: e.target.value
+                    }))}
+                    placeholder={premiumQuestions[currentQuestion].placeholder}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                )}
+                
+                {premiumQuestions[currentQuestion].type === 'textarea' && (
+                  <textarea
+                    value={questionnaireData[premiumQuestions[currentQuestion].id] || ''}
+                    onChange={(e) => setQuestionnaireData(prev => ({
+                      ...prev,
+                      [premiumQuestions[currentQuestion].id]: e.target.value
+                    }))}
+                    placeholder={premiumQuestions[currentQuestion].placeholder}
+                    rows={4}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                )}
+                
+                {premiumQuestions[currentQuestion].type === 'select' && (
+                  <select
+                    value={questionnaireData[premiumQuestions[currentQuestion].id] || ''}
+                    onChange={(e) => setQuestionnaireData(prev => ({
+                      ...prev,
+                      [premiumQuestions[currentQuestion].id]: e.target.value
+                    }))}
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="">Seleziona...</option>
+                    {premiumQuestions[currentQuestion].options.map(option => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex justify-between">
+                <button
+                  onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
+                  disabled={currentQuestion === 0}
+                  className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Indietro
+                </button>
+                
+                {currentQuestion < premiumQuestions.length - 1 ? (
+                  <button
+                    onClick={() => setCurrentQuestion(currentQuestion + 1)}
+                    disabled={!questionnaireData[premiumQuestions[currentQuestion].id]}
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Avanti
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleQuestionnaireSubmit}
+                    disabled={!questionnaireData[premiumQuestions[currentQuestion].id]}
+                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    Invia Richiesta
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

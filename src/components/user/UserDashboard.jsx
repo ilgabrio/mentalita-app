@@ -21,7 +21,11 @@ import {
   PlayCircle,
   CheckCircle,
   Brain,
-  TrendingUp
+  TrendingUp,
+  Crown,
+  Zap,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -184,6 +188,65 @@ const UserDashboard = () => {
           </p>
         </div>
 
+        {/* Premium Banner */}
+        {!userProfile?.isPremium && (
+          <div className="bg-gradient-to-r from-amber-500 to-yellow-600 rounded-xl shadow-lg p-6 mb-8 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full transform translate-x-16 -translate-y-16"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full transform -translate-x-12 translate-y-12"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Crown className="h-8 w-8 text-white" />
+                    <h2 className="text-2xl font-bold">Sblocca il Premium</h2>
+                  </div>
+                  <p className="text-amber-100 mb-4 text-lg">
+                    Accedi a coaching personalizzato, contenuti esclusivi e supporto individuale per massimizzare le tue performance mentali.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="flex items-center space-x-2">
+                      <Zap className="h-5 w-5 text-yellow-200" />
+                      <span className="text-amber-100">Coaching 1-on-1 personalizzato</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="h-5 w-5 text-yellow-200" />
+                      <span className="text-amber-100">Contenuti esclusivi avanzati</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Brain className="h-5 w-5 text-yellow-200" />
+                      <span className="text-amber-100">Analisi approfondite personalizzate</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Target className="h-5 w-5 text-yellow-200" />
+                      <span className="text-amber-100">Piani di training su misura</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => navigate('/questionnaire/premium')}
+                  className="flex items-center justify-center space-x-2 bg-white text-amber-600 px-6 py-3 rounded-lg font-semibold hover:bg-amber-50 transition-colors"
+                >
+                  <Crown className="h-5 w-5" />
+                  <span>Richiedi Premium</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => navigate('/premium')}
+                  className="flex items-center justify-center space-x-2 border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/10 transition-colors"
+                >
+                  <span>Scopri di più</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -254,9 +317,20 @@ const UserDashboard = () => {
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               Esercizi Disponibili
             </h2>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {exercises.length} esercizi totali
-            </span>
+            <div className="flex items-center space-x-3">
+              {!userProfile?.isPremium && (
+                <button
+                  onClick={() => navigate('/premium')}
+                  className="flex items-center space-x-1 px-3 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium"
+                >
+                  <Crown className="h-4 w-4" />
+                  <span>Premium</span>
+                </button>
+              )}
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {exercises.length} esercizi totali
+              </span>
+            </div>
           </div>
 
           {exercises.length === 0 ? (
@@ -328,6 +402,32 @@ const UserDashboard = () => {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Premium CTA for exercises */}
+          {!userProfile?.isPremium && exercises.length > 0 && (
+            <div className="mt-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <Crown className="h-6 w-6 text-amber-600" />
+                  <div>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      Sblocca Esercizi Premium
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Accedi a esercizi avanzati e personalizzati per il tuo livello
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate('/questionnaire/premium')}
+                  className="flex items-center space-x-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+                >
+                  <span>Richiedi Premium</span>
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           )}
         </div>

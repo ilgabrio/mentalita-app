@@ -4,11 +4,13 @@ import { ArrowLeft, Play, Book, Moon, Sun } from 'lucide-react';
 import { db } from '../config/firebase';
 import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const ExerciseDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useTheme();
+  const { user } = useAuth();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [videoError, setVideoError] = useState(false);
@@ -64,17 +66,20 @@ const ExerciseDetail = () => {
 
   const handleStartExercise = async () => {
     try {
-      // Registra l'inizio dell'esercizio
-      await addDoc(collection(db, 'exerciseSessions'), {
-        exerciseId: exercise.id,
-        startTime: new Date(),
-        userId: 'user_id', // Sostituire con l'ID utente reale
-        createdAt: new Date()
-      });
+      // Solo se l'utente è autenticato, registra l'inizio dell'esercizio
+      if (user?.uid) {
+        await addDoc(collection(db, 'exerciseSessions'), {
+          exerciseId: exercise.id,
+          startTime: new Date(),
+          userId: user.uid,
+          createdAt: new Date()
+        });
+      }
       
       navigate(`/exercises/${exercise.id}/practice`);
     } catch (error) {
       console.error('Errore nell\'avvio dell\'esercizio:', error);
+      // Continua comunque alla pagina dell'esercizio
       navigate(`/exercises/${exercise.id}/practice`);
     }
   };

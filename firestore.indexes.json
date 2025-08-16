@@ -62,6 +62,33 @@
         {"fieldPath": "createdAt", "order": "DESCENDING"},
         {"fieldPath": "__name__", "order": "ASCENDING"}
       ]
+    },
+    {
+      "collectionGroup": "premiumPlans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "order", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "premiumPlans",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "monthlyPrice", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "userId", "order": "ASCENDING"},
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
     }
   ]
 }

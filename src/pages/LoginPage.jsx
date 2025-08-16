@@ -63,17 +63,18 @@ const LoginPage = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center px-4">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <img 
-            src="/logo.png" 
-            alt="Mentalità" 
-            className="mx-auto h-16 w-auto"
-          />
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+          <div className="bg-blue-600 text-white font-bold text-3xl w-20 h-20 rounded-xl flex items-center justify-center mx-auto mb-4">
+            M
+          </div>
+          <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+            Mentalità
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Crea la tua forza mentale nello sport
+          </p>
+          <h2 className="mt-6 text-2xl font-bold text-gray-900 dark:text-white">
             Accedi al tuo account
           </h2>
-          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-            Forza mentale per il tuo sport
-          </p>
         </div>
         
         <div className="bg-white dark:bg-gray-800 py-8 px-6 shadow-lg rounded-lg">

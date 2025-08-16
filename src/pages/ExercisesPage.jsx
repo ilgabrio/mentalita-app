@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Play, Clock, Star } from 'lucide-react';
 import { db } from '../config/firebase';
 import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
 import MotivationalMessage from '../components/MotivationalMessage';
+import PremiumCTA from '../components/premium/PremiumCTA';
 
 const ExercisesPage = () => {
+  const { userProfile, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -195,57 +198,63 @@ const ExercisesPage = () => {
           </div>
         )}
 
-        {/* Lista esercizi */}
+        {/* Premium CTA - Inserito ogni 3 esercizi per utenti non premium */}
         <div className="space-y-4">
           {filteredExercises.length > 0 ? (
-            filteredExercises.map((exercise) => (
-              <div
-                key={exercise.id}
-                className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
-                onClick={() => navigate(`/exercises/${exercise.id}`)}
-              >
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-medium text-blue-500 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 px-2 py-1 rounded-full">
-                          {exercise.category || 'Generale'}
-                        </span>
-                        {exercise.difficulty && (
-                          <span className={`text-xs px-2 py-1 rounded-full ${getDifficultyColor(exercise.difficulty)}`}>
-                            {exercise.difficulty}
+            filteredExercises.map((exercise, index) => (
+              <React.Fragment key={exercise.id}>
+                {/* Inserisci Premium CTA ogni 3 esercizi per utenti non premium */}
+                {!isAdmin && !userProfile?.isPremium && index > 0 && index % 3 === 0 && (
+                  <PremiumCTA variant="banner" className="my-6" />
+                )}
+                
+                <div
+                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                  onClick={() => navigate(`/exercises/${exercise.id}`)}
+                >
+                  <div className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-medium text-blue-500 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 px-2 py-1 rounded-full">
+                            {exercise.category || 'Generale'}
                           </span>
-                        )}
-                      </div>
-                      
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                        {exercise.title}
-                      </h3>
-                      
-                      <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2">
-                        {exercise.description}
-                      </p>
-                      
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                        {exercise.duration && (
+                          {exercise.difficulty && (
+                            <span className={`text-xs px-2 py-1 rounded-full ${getDifficultyColor(exercise.difficulty)}`}>
+                              {exercise.difficulty}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                          {exercise.title}
+                        </h3>
+                        
+                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2">
+                          {exercise.description}
+                        </p>
+                        
+                        <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                          {exercise.duration && (
+                            <div className="flex items-center gap-1">
+                              <Clock className="h-4 w-4" />
+                              <span>{exercise.duration}</span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            <span>{exercise.duration}</span>
+                            <Star className="h-4 w-4 fill-current text-yellow-400" />
+                            <span>4.8</span>
                           </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                          <Star className="h-4 w-4 fill-current text-yellow-400" />
-                          <span>4.8</span>
                         </div>
                       </div>
+                      
+                      <button className="ml-4 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors">
+                        <Play className="h-5 w-5" />
+                      </button>
                     </div>
-                    
-                    <button className="ml-4 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors">
-                      <Play className="h-5 w-5" />
-                    </button>
                   </div>
                 </div>
-              </div>
+              </React.Fragment>
             ))
           ) : (
             <div className="text-center py-12">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Clock, BookOpen, Bookmark, Star, Eye } from 'lucide-react';
+import { FileText, Clock, BookOpen, Bookmark, Star, Eye, Search, Filter, TrendingUp, Calendar, User } from 'lucide-react';
 import { db } from '../config/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import MotivationalMessage from '../components/MotivationalMessage';
@@ -11,6 +11,8 @@ const ArticlesWorkspacePage = () => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('date'); // date, views, title
 
   useEffect(() => {
     const fetchArticles = async () => {
@@ -87,9 +89,42 @@ const ArticlesWorkspacePage = () => {
     fetchArticles();
   }, []);
 
-  const filteredArticles = selectedCategory === 'all' 
-    ? articles 
-    : articles.filter(article => article.category === selectedCategory);
+  const getFilteredAndSortedArticles = () => {
+    let filtered = articles;
+    
+    // Filtro per categoria
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(article => article.category === selectedCategory);
+    }
+    
+    // Filtro per ricerca
+    if (searchTerm) {
+      filtered = filtered.filter(article => 
+        article.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        article.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        article.author?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Ordinamento
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'views':
+          return (b.views || 0) - (a.views || 0);
+        case 'title':
+          return (a.title || '').localeCompare(b.title || '');
+        case 'date':
+        default:
+          const dateA = a.publishedAt instanceof Date ? a.publishedAt : a.publishedAt?.toDate() || new Date(0);
+          const dateB = b.publishedAt instanceof Date ? b.publishedAt : b.publishedAt?.toDate() || new Date(0);
+          return dateB - dateA;
+      }
+    });
+    
+    return sorted;
+  };
+  
+  const filteredArticles = getFilteredAndSortedArticles();
 
   const formatDate = (date) => {
     if (!date) return '';
@@ -156,6 +191,65 @@ const ArticlesWorkspacePage = () => {
       <div className="px-4 py-6">
         {/* Messaggio motivazionale */}
         <MotivationalMessage position="top" />
+        
+        {/* Barra di ricerca e filtri */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            {/* Barra di ricerca */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cerca articoli per titolo, descrizione o autore..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            
+            {/* Ordinamento */}
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-gray-400" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-green-500"
+              >
+                <option value="date">Data pubblicazione</option>
+                <option value="views">Più visti</option>
+                <option value="title">Titolo A-Z</option>
+              </select>
+            </div>
+          </div>
+          
+          {/* Contatore risultati */}
+          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+            <span>
+              {filteredArticles.length} articol{filteredArticles.length === 1 ? 'o' : 'i'} 
+              {searchTerm && ` per "${searchTerm}"`}
+              {selectedCategory !== 'all' && ` in "${selectedCategory}"`}
+            </span>
+            {(searchTerm || selectedCategory !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategory('all');
+                }}
+                className="text-green-500 hover:text-green-600 font-medium"
+              >
+                Cancella filtri
+              </button>
+            )}
+          </div>
+        </div>
         
         {/* Filtri per categoria */}
         {categories.length > 0 && (

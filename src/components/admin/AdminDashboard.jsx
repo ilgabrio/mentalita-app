@@ -37,6 +37,8 @@ import PaymentSessionsView from './premium/PaymentSessionsView';
 import PremiumPlansManager from './premium/PremiumPlansManager';
 import SiteSettingsManager from './settings/SiteSettingsManager';
 import QuestionnaireTemplatesManager from './settings/QuestionnaireTemplatesManager';
+import WelcomePageManager from './settings/WelcomePageManager';
+import OnboardingSettingsManager from './settings/OnboardingSettingsManager';
 
 const AdminDashboard = () => {
   const { userProfile, isAdmin } = useAuth();
@@ -117,7 +119,9 @@ const AdminDashboard = () => {
       icon: Settings,
       items: [
         { id: 'site-settings', name: 'Impostazioni Sito', icon: Settings },
+        { id: 'onboarding-flow', name: 'Flusso Onboarding', icon: BookOpen },
         { id: 'questionnaires', name: 'Questionari', icon: FileText },
+        { id: 'welcome-page', name: 'Welcome Page', icon: Star },
       ]
     }
   ];
@@ -156,8 +160,12 @@ const AdminDashboard = () => {
         return <PremiumPlansManager />;
       case 'site-settings':
         return <SiteSettingsManager />;
+      case 'onboarding-flow':
+        return <OnboardingSettingsManager />;
       case 'questionnaires':
         return <QuestionnaireTemplatesManager />;
+      case 'welcome-page':
+        return <WelcomePageManager />;
       default:
         return (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">

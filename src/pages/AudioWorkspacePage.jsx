@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Headphones, Play, Clock, Pause, Volume2, Download, Heart } from 'lucide-react';
+import { Headphones, Play, Clock, Volume2, Download, Heart } from 'lucide-react';
 import { db } from '../config/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import MotivationalMessage from '../components/MotivationalMessage';
@@ -11,23 +11,53 @@ const AudioWorkspacePage = () => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [playingId, setPlayingId] = useState(null);
 
   useEffect(() => {
     const fetchAudioContent = async () => {
       try {
         console.log('🎧 CARICAMENTO CONTENUTI AUDIO...');
         
-        // Carica dalla collezione audioContent
-        const audioSnapshot = await getDocs(collection(db, 'audioContent'));
-        const audioData = [];
+        let audioData = [];
         
-        audioSnapshot.forEach((doc) => {
-          const data = { id: doc.id, ...doc.data() };
-          audioData.push(data);
-        });
+        // Prova prima dalla collezione audioContent
+        try {
+          const audioSnapshot = await getDocs(collection(db, 'audioContent'));
+          audioSnapshot.forEach((doc) => {
+            const data = { id: doc.id, ...doc.data() };
+            console.log(`📄 AudioContent doc ${doc.id}:`, {
+              title: data.title,
+              audioUrl: data.audioUrl,
+              url: data.url,
+              fileUrl: data.fileUrl,
+              allFields: Object.keys(data)
+            });
+            audioData.push(data);
+          });
+          console.log('✅ AudioContent trovati:', audioData.length);
+        } catch (error) {
+          console.log('⚠️ Errore audioContent:', error);
+        }
         
-        console.log('✅ Contenuti audio trovati:', audioData.length);
+        // Se non ne troviamo, prova dalla collezione appAudios
+        if (audioData.length === 0) {
+          try {
+            const appAudioSnapshot = await getDocs(collection(db, 'appAudios'));
+            appAudioSnapshot.forEach((doc) => {
+              const data = { id: doc.id, ...doc.data() };
+              console.log(`📄 AppAudios doc ${doc.id}:`, {
+                title: data.title,
+                audioUrl: data.audioUrl,
+                url: data.url,
+                fileUrl: data.fileUrl,
+                allFields: Object.keys(data)
+              });
+              audioData.push(data);
+            });
+            console.log('✅ AppAudios trovati:', audioData.length);
+          } catch (error) {
+            console.log('⚠️ Errore appAudios:', error);
+          }
+        }
         
         setAudioContent(audioData);
         
@@ -113,13 +143,6 @@ const AudioWorkspacePage = () => {
     return plays.toString();
   };
 
-  const handlePlayPause = (audioId) => {
-    if (playingId === audioId) {
-      setPlayingId(null);
-    } else {
-      setPlayingId(audioId);
-    }
-  };
 
   const getTypeIcon = (type) => {
     switch(type) {
@@ -235,21 +258,11 @@ const AudioWorkspacePage = () => {
               >
                 <div className="p-6">
                   <div className="flex items-start gap-4">
-                    {/* Audio player button */}
+                    {/* Audio thumbnail/icon */}
                     <div className="flex-shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePlayPause(audio.id);
-                        }}
-                        className="w-16 h-16 bg-purple-500 hover:bg-purple-600 text-white rounded-full flex items-center justify-center transition-colors"
-                      >
-                        {playingId === audio.id ? (
-                          <Pause className="h-6 w-6" />
-                        ) : (
-                          <Play className="h-6 w-6 ml-1" />
-                        )}
-                      </button>
+                      <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full flex items-center justify-center">
+                        <Headphones className="h-8 w-8" />
+                      </div>
                     </div>
                     
                     <div className="flex-1 min-w-0">
@@ -306,19 +319,6 @@ const AudioWorkspacePage = () => {
                       </button>
                     </div>
                   </div>
-                  
-                  {/* Progress bar (se in riproduzione) */}
-                  {playingId === audio.id && (
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500">0:00</span>
-                        <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-1">
-                          <div className="bg-purple-500 h-1 rounded-full w-1/4 transition-all duration-300"></div>
-                        </div>
-                        <span className="text-xs text-gray-500">{audio.duration}</span>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ))

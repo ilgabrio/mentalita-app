@@ -63,18 +63,43 @@ const NewsletterSender = () => {
 
   const fetchSubscribers = async () => {
     try {
-      const subscribersQuery = query(
-        collection(db, 'newsletterSubscribers'),
-        where('active', '==', true)
-      );
-      const snapshot = await getDocs(subscribersQuery);
-      const subscribersData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setSubscribers(subscribersData);
+      // Prima proviamo a recuperare dalla collezione dedicata agli iscritti newsletter
+      try {
+        const subscribersQuery = query(
+          collection(db, 'newsletterSubscribers'),
+          where('active', '==', true)
+        );
+        const snapshot = await getDocs(subscribersQuery);
+        if (snapshot.docs.length > 0) {
+          const subscribersData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setSubscribers(subscribersData);
+          return;
+        }
+      } catch (newsletterError) {
+        console.log('Newsletter subscribers collection not found, falling back to users');
+      }
+
+      // Fallback: usa la collezione users per gli iscritti
+      const usersQuery = query(collection(db, 'users'));
+      const usersSnapshot = await getDocs(usersQuery);
+      const usersData = usersSnapshot.docs.map(doc => {
+        const userData = doc.data();
+        return {
+          id: doc.id,
+          email: userData.email,
+          name: userData.displayName || userData.name || 'Utente',
+          active: true, // Considera tutti gli utenti come attivi per la newsletter
+          subscribedAt: userData.createdAt || new Date(),
+          tags: ['users'] // Tag per distinguere che vengono dalla collezione users
+        };
+      });
+      setSubscribers(usersData);
     } catch (error) {
       console.error('Error loading subscribers:', error);
+      setSubscribers([]);
     }
   };
 

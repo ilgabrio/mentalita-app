@@ -28,10 +28,14 @@ import {
   ChevronUp,
   ChevronDown,
   Star,
-  Calendar
+  Calendar,
+  Users,
+  Settings
 } from 'lucide-react';
+import QuestionnaireResponsesManager from './QuestionnaireResponsesManager';
 
 const QuestionnaireTemplatesManager = () => {
+  const [activeTab, setActiveTab] = useState('templates'); // templates, responses
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -275,48 +279,79 @@ const QuestionnaireTemplatesManager = () => {
         <div className="flex items-center space-x-3 mb-4 lg:mb-0">
           <ClipboardList className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Template Questionari ({filteredTemplates.length})
+            Gestione Questionari
           </h2>
         </div>
         
+        {activeTab === 'templates' && (
+          <button
+            onClick={handleCreate}
+            className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Nuovo Template</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex space-x-1 mb-6 bg-gray-100 dark:bg-gray-700 p-1 rounded-lg">
         <button
-          onClick={handleCreate}
-          className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          onClick={() => setActiveTab('templates')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-colors ${
+            activeTab === 'templates'
+              ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
         >
-          <Plus className="h-4 w-4" />
-          <span>Nuovo Template</span>
+          <Settings className="h-4 w-4" />
+          <span>Template</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('responses')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-md font-medium transition-colors ${
+            activeTab === 'responses'
+              ? 'bg-white dark:bg-gray-800 text-indigo-600 dark:text-indigo-400 shadow-sm'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          <span>Risposte</span>
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cerca per titolo o descrizione..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
-          />
-        </div>
-        
-        <div className="relative">
-          <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="pl-10 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none cursor-pointer min-w-48"
-          >
-            <option value="all">Tutte le categorie</option>
-            {categories.map(category => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+      {/* Tab Content */}
+      {activeTab === 'templates' && (
+        <>
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Cerca per titolo o descrizione..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-full"
+              />
+            </div>
+            
+            <div className="relative">
+              <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="pl-10 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent appearance-none cursor-pointer min-w-48"
+              >
+                <option value="all">Tutte le categorie</option>
+                {categories.map(category => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
       {/* Templates Grid */}
       {filteredTemplates.length === 0 ? (
@@ -418,6 +453,12 @@ const QuestionnaireTemplatesManager = () => {
             </div>
           ))}
         </div>
+      )}
+        </>
+      )}
+
+      {activeTab === 'responses' && (
+        <QuestionnaireResponsesManager />
       )}
 
       {/* Modal */}

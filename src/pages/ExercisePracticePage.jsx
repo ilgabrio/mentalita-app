@@ -8,12 +8,17 @@ import { useAuth } from '../context/AuthContext';
 const ExercisePracticePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { currentUser } = useAuth();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [answers, setAnswers] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  
+  // Check if coming from onboarding
+  const urlParams = new URLSearchParams(window.location.search);
+  const fromOnboarding = urlParams.get('from') === 'onboarding';
+  const onboardingDay = urlParams.get('day') || urlParams.get('step'); // Support both day and step for backward compatibility
 
   useEffect(() => {
     const fetchExercise = async () => {
@@ -76,22 +81,60 @@ const ExercisePracticePage = () => {
     try {
       setSaving(true);
       
-      // Salva le risposte in Firestore
-      await addDoc(collection(db, 'exerciseResponses'), {
+      console.log('🔍 DEBUG SALVATAGGIO:', {
+        currentUser: currentUser,
+        userId: currentUser?.uid,
+        userEmail: currentUser?.email,
+        isAuthenticated: !!currentUser?.uid,
         exerciseId: id,
-        userId: user?.uid || 'anonymous',
-        userEmail: user?.email || 'anonymous',
+        answers: answers
+      });
+      
+      // Verifica che l'utente sia autenticato
+      if (!currentUser?.uid) {
+        console.error('❌ Utente non autenticato - impossibile salvare');
+        alert('Devi essere autenticato per salvare le risposte. Effettua il login e riprova.');
+        return;
+      }
+      
+      console.log('✅ Utente autenticato, tentativo di salvataggio...');
+      
+      // Dati da salvare
+      const dataToSave = {
+        exerciseId: id,
+        userId: currentUser.uid,
+        userEmail: currentUser.email || '',
         answers: answers,
         completedAt: new Date(),
         exerciseTitle: exercise?.title || 'Unknown Exercise'
-      });
+      };
+      
+      console.log('📝 Dati da salvare:', dataToSave);
+      
+      // Salva le risposte in Firestore
+      const docRef = await addDoc(collection(db, 'exerciseResponses'), dataToSave);
+      
+      console.log('✅ Documento creato con ID:', docRef.id);
 
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       
-      console.log('✅ Risposte salvate:', answers);
+      // If coming from onboarding, redirect back with completion status
+      if (fromOnboarding && onboardingDay !== null) {
+        setTimeout(() => {
+          navigate(`/onboarding?completed=true&day=${onboardingDay}`);
+        }, 1500);
+      }
+      
+      console.log('✅ Risposte salvate con successo!');
     } catch (error) {
-      console.error('Errore nel salvataggio:', error);
+      console.error('❌ Errore nel salvataggio:', error);
+      console.error('❌ Dettagli errore:', {
+        code: error.code,
+        message: error.message,
+        details: error.details
+      });
+      alert('Errore nel salvataggio delle risposte: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -239,10 +282,10 @@ const ExercisePracticePage = () => {
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Esercizio non trovato</h2>
           <button
-            onClick={() => navigate('/exercises')}
+            onClick={() => navigate(fromOnboarding ? '/onboarding' : '/exercises')}
             className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            Torna agli esercizi
+            {fromOnboarding ? 'Torna al Percorso' : 'Torna agli esercizi'}
           </button>
         </div>
       </div>
@@ -258,7 +301,7 @@ const ExercisePracticePage = () => {
         <div className="px-4 py-4 flex items-center justify-between">
           <div className="flex items-center">
             <button
-              onClick={() => navigate(`/exercises/${id}`)}
+              onClick={() => navigate(fromOnboarding ? '/onboarding' : `/exercises/${id}`)}
               className="mr-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <ArrowLeft className="h-6 w-6 text-gray-600 dark:text-gray-300" />
@@ -359,10 +402,10 @@ const ExercisePracticePage = () => {
               Questo esercizio non ha elementi configurati per la pratica.
             </p>
             <button
-              onClick={() => navigate(`/exercises/${id}`)}
+              onClick={() => navigate(fromOnboarding ? '/onboarding' : `/exercises/${id}`)}
               className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
-              Torna al Dettaglio
+              {fromOnboarding ? 'Torna al Percorso' : 'Torna al Dettaglio'}
             </button>
           </div>
         )}

@@ -26,12 +26,15 @@ import {
   Target,
   BookOpen,
   Settings,
-  FileEdit
+  FileEdit,
+  Video
 } from 'lucide-react';
 import ExerciseFormEditor from './ExerciseFormEditor';
+import VideoSelector from '../VideoSelector';
 
 const ExerciseManager = () => {
   const [exercises, setExercises] = useState([]);
+  const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -53,7 +56,8 @@ const ExerciseManager = () => {
     isPublished: false,
     tags: [],
     objectives: [],
-    instructions: []
+    instructions: [],
+    selectedVideos: []
   });
 
   const categories = [
@@ -71,7 +75,72 @@ const ExerciseManager = () => {
 
   useEffect(() => {
     fetchExercises();
+    fetchVideos();
   }, []);
+
+  const convertVideoIdsToObjects = (videoIds) => {
+    if (!Array.isArray(videoIds)) return [];
+    
+    return videoIds.map(id => {
+      // If it's already an object, return as is
+      if (typeof id === 'object' && id.id) {
+        return id;
+      }
+      
+      // If it's a string ID, find the corresponding video object
+      if (typeof id === 'string') {
+        const video = videos.find(v => v.id === id);
+        return video || null;
+      }
+      
+      return null;
+    }).filter(Boolean);
+  };
+
+  const fetchVideos = async () => {
+    try {
+      console.log('🎥 ExerciseManager: Fetching videos for exercise selection...');
+      
+      // Try appVideos first
+      let q = query(collection(db, 'appVideos'));
+      let snapshot = await getDocs(q);
+      const videosData = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.isPublished !== false) {
+          videosData.push({
+            id: doc.id,
+            ...data
+          });
+        }
+      });
+
+      // If no results from appVideos, try videos collection
+      if (videosData.length === 0) {
+        try {
+          q = query(collection(db, 'videos'));
+          snapshot = await getDocs(q);
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.isPublished !== false) {
+              videosData.push({
+                id: doc.id,
+                ...data
+              });
+            }
+          });
+        } catch (error) {
+          console.log('🎥 ExerciseManager: No videos collection found');
+        }
+      }
+
+      console.log(`🎥 ExerciseManager: Loaded ${videosData.length} videos`);
+      setVideos(videosData);
+    } catch (error) {
+      console.error('🎥 ExerciseManager: Error fetching videos:', error);
+    }
+  };
 
   const fetchExercises = async () => {
     try {
@@ -140,7 +209,8 @@ const ExerciseManager = () => {
         isPublished: exercise.isPublished || false,
         tags: exercise.tags || [],
         objectives: exercise.objectives || [],
-        instructions: exercise.instructions || []
+        instructions: exercise.instructions || [],
+        selectedVideos: convertVideoIdsToObjects(exercise.selectedVideos || [])
       });
     } else {
       setEditingExercise(null);
@@ -155,7 +225,8 @@ const ExerciseManager = () => {
         isPublished: false,
         tags: [],
         objectives: [],
-        instructions: []
+        instructions: [],
+        selectedVideos: []
       });
     }
     setShowModal(true);
@@ -175,7 +246,8 @@ const ExerciseManager = () => {
       isPublished: false,
       tags: [],
       objectives: [],
-      instructions: []
+      instructions: [],
+      selectedVideos: []
     });
   };
 
@@ -187,11 +259,17 @@ const ExerciseManager = () => {
 
     setSaving(true);
     try {
+      // Convert video objects to IDs for storage
+      const videoIds = formData.selectedVideos.map(video => 
+        typeof video === 'object' ? video.id : video
+      ).filter(Boolean);
+      
       const exerciseData = {
         ...formData,
         title: formData.title.trim(),
         description: formData.description.trim(),
         content: formData.content.trim(),
+        selectedVideos: videoIds,
         updatedAt: new Date()
       };
 
@@ -598,6 +676,15 @@ const ExerciseManager = () => {
                     placeholder="Contenuto completo dell'esercizio con istruzioni dettagliate..."
                   />
                 </div>
+
+                {/* Video Selector */}
+                <VideoSelector
+                  value={formData.selectedVideos}
+                  onChange={(videos) => setFormData({ ...formData, selectedVideos: videos })}
+                  label="Video collegati all'esercizio"
+                  placeholder="Seleziona uno o più video..."
+                  multiple={true}
+                />
               </div>
             </div>
 

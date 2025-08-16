@@ -1,15 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, User, Settings, Shield, Crown, Star, Award } from 'lucide-react';
+import { 
+  LogOut, 
+  User, 
+  Settings, 
+  Shield, 
+  Crown, 
+  Star, 
+  Award, 
+  History, 
+  Calendar, 
+  Clock, 
+  CheckCircle, 
+  Target,
+  Download,
+  Brain,
+  BookOpen,
+  X,
+  Eye,
+  FileText,
+  Zap,
+  ChevronRight,
+  Sparkles
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const ProfilePage = () => {
   const { currentUser, userProfile, isAdmin, logout } = useAuth();
   const [userStats, setUserStats] = useState(null);
   const [badges, setBadges] = useState([]);
+  const [exerciseHistory, setExerciseHistory] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showFullHistory, setShowFullHistory] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [exerciseDetails, setExerciseDetails] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,6 +59,29 @@ const ProfilePage = () => {
         if (statsDoc.exists()) {
           setUserStats(statsDoc.data());
         }
+
+        // Get exercise history (completed responses)
+        const historyQuery = query(
+          collection(db, 'exerciseResponses'),
+          where('userId', '==', currentUser.uid),
+          orderBy('completedAt', 'desc'),
+          limit(50) // Get last 50 completed exercises
+        );
+        const historySnapshot = await getDocs(historyQuery);
+        const exerciseData = historySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            exerciseId: data.exerciseId,
+            exerciseTitle: data.exerciseTitle,
+            completedAt: data.completedAt?.toDate ? data.completedAt.toDate() : new Date(data.completedAt),
+            timeSpent: data.timeSpent, // in seconds
+            responses: data.answers || data.responses, // answers è il campo corretto dal salvataggio
+            sessionId: data.sessionId,
+            userId: data.userId
+          };
+        });
+        setExerciseHistory(exerciseData);
       } catch (error) {
         console.error('Error fetching user data:', error);
       } finally {
@@ -46,6 +98,351 @@ const ProfilePage = () => {
       navigate('/login', { replace: true });
     } catch (error) {
       console.error('Errore durante il logout:', error);
+    }
+  };
+
+  const handleExerciseClick = async (session) => {
+    try {
+      // Carica i dettagli dell'esercizio se non li abbiamo già
+      if (!exerciseDetails[session.exerciseId]) {
+        const exerciseDoc = await getDoc(doc(db, 'exercises', session.exerciseId));
+        if (exerciseDoc.exists()) {
+          setExerciseDetails(prev => ({
+            ...prev,
+            [session.exerciseId]: exerciseDoc.data()
+          }));
+        }
+      }
+      
+      setSelectedExercise(session);
+      setShowModal(true);
+    } catch (error) {
+      console.error('Errore nel caricamento dettagli esercizio:', error);
+      setSelectedExercise(session);
+      setShowModal(true);
+    }
+  };
+
+  const downloadSingleExercisePDF = async (session) => {
+    try {
+      // Carica i dettagli dell'esercizio se necessario
+      let exercise = exerciseDetails[session.exerciseId];
+      if (!exercise) {
+        const exerciseDoc = await getDoc(doc(db, 'exercises', session.exerciseId));
+        if (exerciseDoc.exists()) {
+          exercise = exerciseDoc.data();
+          setExerciseDetails(prev => ({
+            ...prev,
+            [session.exerciseId]: exercise
+          }));
+        }
+      }
+
+      const pdfDoc = new jsPDF();
+      const userName = userProfile?.displayName || userProfile?.name || 'Atleta';
+      
+      // Header
+      pdfDoc.setFontSize(20);
+      pdfDoc.setTextColor(79, 70, 229);
+      pdfDoc.text('Mentalità', 20, 20);
+      
+      pdfDoc.setFontSize(16);
+      pdfDoc.setTextColor(0, 0, 0);
+      pdfDoc.text(`Esercizio: ${session.exerciseTitle}`, 20, 35);
+      
+      pdfDoc.setFontSize(10);
+      pdfDoc.setTextColor(100, 100, 100);
+      pdfDoc.text(`Atleta: ${userName}`, 20, 45);
+      pdfDoc.text(`Completato il: ${session.completedAt.toLocaleString('it-IT')}`, 20, 52);
+      if (session.timeSpent) {
+        pdfDoc.text(`Durata: ${Math.round(session.timeSpent / 60)} minuti`, 20, 59);
+      }
+
+      let currentY = 75;
+
+      // Descrizione esercizio se disponibile
+      if (exercise && exercise.description) {
+        pdfDoc.setFontSize(12);
+        pdfDoc.setTextColor(0, 0, 0);
+        pdfDoc.text('Descrizione:', 20, currentY);
+        currentY += 10;
+        
+        pdfDoc.setFontSize(10);
+        pdfDoc.setTextColor(50, 50, 50);
+        const descriptionLines = pdfDoc.splitTextToSize(exercise.description, 170);
+        pdfDoc.text(descriptionLines, 20, currentY);
+        currentY += descriptionLines.length * 5 + 10;
+      }
+
+      // Risposte
+      pdfDoc.setFontSize(14);
+      pdfDoc.setTextColor(79, 70, 229);
+      pdfDoc.text('Risposte:', 20, currentY);
+      currentY += 15;
+
+      if (exercise && exercise.elements && session.responses) {
+        exercise.elements.forEach((element, index) => {
+          const userResponse = session.responses[element.id];
+          
+          if (userResponse !== undefined) {
+            // Controlla spazio disponibile
+            if (currentY > 250) {
+              pdfDoc.addPage();
+              currentY = 20;
+            }
+
+            // Domanda
+            pdfDoc.setFontSize(11);
+            pdfDoc.setTextColor(0, 0, 0);
+            const questionText = element.title || element.question || element.text || `Domanda ${index + 1}`;
+            const wrappedQuestion = pdfDoc.splitTextToSize(`${index + 1}. ${questionText}`, 170);
+            pdfDoc.text(wrappedQuestion, 20, currentY);
+            currentY += wrappedQuestion.length * 6;
+
+            // Descrizione domanda se presente
+            if (element.description) {
+              pdfDoc.setFontSize(9);
+              pdfDoc.setTextColor(100, 100, 100);
+              const wrappedDesc = pdfDoc.splitTextToSize(element.description, 170);
+              pdfDoc.text(wrappedDesc, 20, currentY);
+              currentY += wrappedDesc.length * 4;
+            }
+
+            // Risposta
+            pdfDoc.setFontSize(10);
+            pdfDoc.setTextColor(50, 50, 50);
+            let responseText = '';
+            
+            if (typeof userResponse === 'string') {
+              responseText = userResponse;
+            } else if (typeof userResponse === 'number') {
+              responseText = userResponse.toString();
+            } else if (Array.isArray(userResponse)) {
+              responseText = userResponse.join(', ');
+            } else {
+              responseText = JSON.stringify(userResponse);
+            }
+
+            if (responseText) {
+              const wrappedResponse = pdfDoc.splitTextToSize(`Risposta: ${responseText}`, 170);
+              pdfDoc.text(wrappedResponse, 20, currentY);
+              currentY += wrappedResponse.length * 5;
+            }
+            
+            currentY += 8;
+          }
+        });
+      } else {
+        // Se non abbiamo i dettagli dell'esercizio
+        pdfDoc.setFontSize(10);
+        pdfDoc.setTextColor(100, 100, 100);
+        pdfDoc.text('Dettagli esercizio non disponibili', 20, currentY);
+        currentY += 10;
+        
+        if (session.responses) {
+          Object.entries(session.responses).forEach(([key, value]) => {
+            const responseText = typeof value === 'string' ? value : JSON.stringify(value);
+            if (responseText) {
+              const wrappedResponse = pdfDoc.splitTextToSize(`${key}: ${responseText}`, 170);
+              pdfDoc.text(wrappedResponse, 20, currentY);
+              currentY += wrappedResponse.length * 5 + 3;
+            }
+          });
+        }
+      }
+
+      // Footer
+      const pageHeight = pdfDoc.internal.pageSize.height;
+      pdfDoc.setFontSize(8);
+      pdfDoc.setTextColor(150, 150, 150);
+      pdfDoc.text('Mentalità - Il tuo percorso di crescita mentale sportiva', 20, pageHeight - 20);
+
+      // Save PDF
+      const fileName = `Mentalita_${session.exerciseTitle.replace(/\s+/g, '_')}_${session.completedAt.toISOString().split('T')[0]}.pdf`;
+      pdfDoc.save(fileName);
+      
+    } catch (error) {
+      console.error('Error generating single exercise PDF:', error);
+      alert('Errore durante la generazione del PDF');
+    }
+  };
+
+  const exportToPDF = async () => {
+    if (exerciseHistory.length === 0) {
+      alert('Nessun esercizio da esportare!');
+      return;
+    }
+
+    try {
+      // Recupera i dettagli degli esercizi per collegare domande e risposte
+      const exerciseDetails = {};
+      const exerciseIds = [...new Set(exerciseHistory.map(h => h.exerciseId))];
+      
+      for (const exerciseId of exerciseIds) {
+        const exerciseDoc = await getDoc(doc(db, 'exercises', exerciseId));
+        if (exerciseDoc.exists()) {
+          exerciseDetails[exerciseId] = exerciseDoc.data();
+        }
+      }
+
+      const pdfDoc = new jsPDF();
+      const userName = userProfile?.displayName || userProfile?.name || 'Atleta';
+    
+      // Header
+      pdfDoc.setFontSize(20);
+      pdfDoc.setTextColor(79, 70, 229); // Indigo color
+      pdfDoc.text('Mentalità', 20, 20);
+      
+      pdfDoc.setFontSize(16);
+      pdfDoc.setTextColor(0, 0, 0);
+      pdfDoc.text(`Storico Esercizi Dettagliato - ${userName}`, 20, 35);
+      
+      pdfDoc.setFontSize(10);
+      pdfDoc.setTextColor(100, 100, 100);
+      pdfDoc.text(`Generato il: ${new Date().toLocaleDateString('it-IT')}`, 20, 45);
+      pdfDoc.text(`Email: ${userProfile?.email || currentUser?.email}`, 20, 52);
+
+      let currentY = 70;
+
+      // Stats summary
+      if (userStats) {
+        pdfDoc.setFontSize(12);
+        pdfDoc.setTextColor(0, 0, 0);
+        pdfDoc.text('Statistiche Generali:', 20, currentY);
+        currentY += 10;
+        
+        pdfDoc.setFontSize(10);
+        pdfDoc.text(`Esercizi completati: ${userStats.completedExercises || exerciseHistory.length}`, 25, currentY);
+        currentY += 7;
+        pdfDoc.text(`Giorni consecutivi: ${userStats.currentStreak || 0}`, 25, currentY);
+        currentY += 7;
+        pdfDoc.text(`Badge ottenuti: ${badges.length}`, 25, currentY);
+        currentY += 15;
+      }
+
+      // Per ogni esercizio, mostra domande e risposte dettagliate
+      exerciseHistory.forEach((session, index) => {
+        const exercise = exerciseDetails[session.exerciseId];
+        
+        // Controlla se c'è spazio per l'esercizio, altrimenti nuova pagina
+        if (currentY > 250) {
+          pdfDoc.addPage();
+          currentY = 20;
+        }
+
+        // Titolo esercizio
+        pdfDoc.setFontSize(14);
+        pdfDoc.setTextColor(79, 70, 229);
+        pdfDoc.text(`${index + 1}. ${session.exerciseTitle}`, 20, currentY);
+        currentY += 10;
+
+        // Info esercizio
+        pdfDoc.setFontSize(9);
+        pdfDoc.setTextColor(100, 100, 100);
+        pdfDoc.text(`Completato il: ${session.completedAt.toLocaleDateString('it-IT')} alle ${session.completedAt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`, 20, currentY);
+        currentY += 5;
+        if (session.timeSpent) {
+          pdfDoc.text(`Durata: ${Math.round(session.timeSpent / 60)} minuti`, 20, currentY);
+          currentY += 5;
+        }
+        currentY += 5;
+
+        if (exercise && exercise.elements) {
+          // Collega domande e risposte
+          exercise.elements.forEach((element) => {
+            const userResponse = session.responses[element.id];
+            
+            if (userResponse !== undefined) {
+              // Domanda
+              pdfDoc.setFontSize(10);
+              pdfDoc.setTextColor(0, 0, 0);
+              
+              const questionText = element.question || element.text || 'Domanda';
+              const wrappedQuestion = pdfDoc.splitTextToSize(questionText, 170);
+              pdfDoc.text(`Q: ${wrappedQuestion}`, 20, currentY);
+              currentY += wrappedQuestion.length * 5;
+
+              // Risposta
+              pdfDoc.setTextColor(50, 50, 50);
+              let responseText = '';
+              
+              if (typeof userResponse === 'string') {
+                responseText = userResponse;
+              } else if (typeof userResponse === 'number') {
+                responseText = userResponse.toString();
+              } else if (Array.isArray(userResponse)) {
+                responseText = userResponse.join(', ');
+              } else {
+                responseText = JSON.stringify(userResponse);
+              }
+
+              if (responseText) {
+                const wrappedResponse = pdfDoc.splitTextToSize(`R: ${responseText}`, 170);
+                pdfDoc.text(wrappedResponse, 20, currentY);
+                currentY += wrappedResponse.length * 5;
+              }
+              
+              currentY += 3; // Spazio tra domande
+            }
+          });
+        } else {
+          // Se non abbiamo i dettagli dell'esercizio, mostra solo le risposte
+          pdfDoc.setFontSize(10);
+          pdfDoc.setTextColor(100, 100, 100);
+          pdfDoc.text('Dettagli esercizio non disponibili', 20, currentY);
+          currentY += 7;
+          
+          Object.entries(session.responses || {}).forEach(([key, value]) => {
+            const responseText = typeof value === 'string' ? value : JSON.stringify(value);
+            if (responseText) {
+              const wrappedResponse = pdfDoc.splitTextToSize(`${key}: ${responseText}`, 170);
+              pdfDoc.text(wrappedResponse, 20, currentY);
+              currentY += wrappedResponse.length * 5;
+            }
+          });
+        }
+        
+        currentY += 10; // Spazio tra esercizi
+      });
+
+      // Add badges section if any
+      if (badges.length > 0) {
+        if (currentY > 250) {
+          pdfDoc.addPage();
+          currentY = 20;
+        }
+        
+        pdfDoc.setFontSize(12);
+        pdfDoc.setTextColor(0, 0, 0);
+        pdfDoc.text('Badge Ottenuti:', 20, currentY);
+        currentY += 10;
+        
+        pdfDoc.setFontSize(10);
+        badges.slice(0, 10).forEach((badge, index) => {
+          pdfDoc.text(`• ${badge.name}`, 25, currentY + (index * 7));
+        });
+        currentY += (Math.min(badges.length, 10) * 7);
+        
+        if (badges.length > 10) {
+          pdfDoc.text(`... e altri ${badges.length - 10} badge`, 25, currentY);
+          currentY += 7;
+        }
+      }
+
+      // Footer on last page
+      const pageHeight = pdfDoc.internal.pageSize.height;
+      pdfDoc.setFontSize(8);
+      pdfDoc.setTextColor(150, 150, 150);
+      pdfDoc.text('Mentalità - Il tuo percorso di crescita mentale sportiva', 20, pageHeight - 20);
+      pdfDoc.text(`${exerciseHistory.length} esercizi totali`, 20, pageHeight - 13);
+
+      // Save the PDF
+      const fileName = `Mentalita_Storico_${userName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdfDoc.save(fileName);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Errore durante la generazione del PDF');
     }
   };
 
@@ -80,6 +477,54 @@ const ProfilePage = () => {
       </div>
 
       <div className="px-4 py-6">
+        {/* Premium CTA - Sempre visibile se non è admin */}
+        {!isAdmin && !userProfile?.isPremium && (
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg p-6 mb-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="bg-white/20 p-3 rounded-full">
+                  <Crown className="h-8 w-8 text-yellow-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Sblocca il tuo potenziale</h3>
+                  <p className="text-white/90 text-sm">Accedi a contenuti esclusivi e coaching personalizzato</p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/premium')}
+                className="bg-white text-purple-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 flex items-center space-x-2"
+              >
+                <span>Scopri Premium</span>
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Upgrade CTA per utenti Premium (non Gold) */}
+        {!isAdmin && userProfile?.isPremium && userProfile?.planType !== 'gold' && (
+          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-6 mb-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="bg-white/20 p-3 rounded-full">
+                  <Sparkles className="h-8 w-8 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Passa a Gold</h3>
+                  <p className="text-white/90 text-sm">Coaching personalizzato 1-on-1 e percorsi su misura</p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/premium')}
+                className="bg-white text-orange-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 flex items-center space-x-2"
+              >
+                <span>Upgrade a Gold</span>
+                <Zap className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Profile Card */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
           <div className="flex items-center space-x-4 mb-6">
@@ -92,6 +537,18 @@ const ProfilePage = () => {
                   {userProfile?.displayName || userProfile?.name || 'Atleta'}
                 </h2>
                 {isAdmin && <Crown className="h-5 w-5 text-yellow-500" />}
+                {userProfile?.isPremium && userProfile?.planType === 'gold' && (
+                  <div className="flex items-center space-x-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
+                    <Sparkles className="h-3 w-3" />
+                    <span>GOLD</span>
+                  </div>
+                )}
+                {userProfile?.isPremium && userProfile?.planType === 'premium' && (
+                  <div className="flex items-center space-x-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
+                    <Crown className="h-3 w-3" />
+                    <span>PREMIUM</span>
+                  </div>
+                )}
               </div>
               <p className="text-gray-600 dark:text-gray-300">
                 {userProfile?.email || currentUser?.email}
@@ -191,6 +648,138 @@ const ProfilePage = () => {
           </div>
         </div>
 
+        {/* Exercise History */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center space-x-2">
+              <History className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Storico Esercizi
+              </h3>
+            </div>
+            {exerciseHistory.length > 0 && (
+              <button
+                onClick={() => setShowFullHistory(!showFullHistory)}
+                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium"
+              >
+                {showFullHistory ? 'Mostra meno' : `Vedi tutti (${exerciseHistory.length})`}
+              </button>
+            )}
+          </div>
+
+          {exerciseHistory.length === 0 ? (
+            <div className="text-center py-8">
+              <Brain className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+              <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                Nessun esercizio completato
+              </h4>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
+                Inizia il tuo primo esercizio per vedere qui lo storico
+              </p>
+              <button
+                onClick={() => navigate('/exercises')}
+                className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Vai agli Esercizi</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {(showFullHistory ? exerciseHistory : exerciseHistory.slice(0, 5)).map((session) => (
+                  <div
+                    key={session.id}
+                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <div 
+                      className="flex items-center space-x-3 flex-1 cursor-pointer"
+                      onClick={() => handleExerciseClick(session)}
+                    >
+                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                          {session.exerciseTitle || 'Esercizio'}
+                        </h4>
+                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>
+                              {session.completedAt.toLocaleDateString('it-IT', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3" />
+                            <span>
+                              {session.completedAt.toLocaleTimeString('it-IT', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          {session.timeSpent && (
+                            <div className="flex items-center space-x-1">
+                              <Target className="h-3 w-3" />
+                              <span>
+                                {Math.round(session.timeSpent / 60)} min
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {Object.keys(session.responses || {}).length} risposte • Clicca per visualizzare
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExerciseClick(session);
+                        }}
+                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Visualizza risposte"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadSingleExercisePDF(session);
+                        }}
+                        className="p-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                        title="Scarica PDF"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* PDF Export Button */}
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={exportToPDF}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Esporta Storico PDF</span>
+                </button>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  Scarica un report completo del tuo storico esercizi
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Logout Button */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <button
@@ -206,6 +795,151 @@ const ProfilePage = () => {
           </p>
         </div>
       </div>
+
+      {/* Modal per visualizzare risposte dettagliate */}
+      {showModal && selectedExercise && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-600">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {selectedExercise.exerciseTitle}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Completato il {selectedExercise.completedAt.toLocaleString('it-IT')}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => downloadSingleExercisePDF(selectedExercise)}
+                  className="p-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                  title="Scarica PDF"
+                >
+                  <Download className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Modal */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              {/* Descrizione esercizio se disponibile */}
+              {exerciseDetails[selectedExercise.exerciseId]?.description && (
+                <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-l-4 border-blue-500">
+                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                    Descrizione dell'Esercizio
+                  </h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    {exerciseDetails[selectedExercise.exerciseId].description}
+                  </p>
+                </div>
+              )}
+
+              {/* Risposte */}
+              <div className="space-y-6">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600 pb-2">
+                  Le tue Risposte
+                </h4>
+
+                {exerciseDetails[selectedExercise.exerciseId]?.elements ? (
+                  // Se abbiamo i dettagli dell'esercizio, mostra domande e risposte
+                  exerciseDetails[selectedExercise.exerciseId].elements.map((element, index) => {
+                    const userResponse = selectedExercise.responses?.[element.id];
+                    
+                    if (userResponse === undefined || userResponse === '') return null;
+
+                    return (
+                      <div key={element.id || index} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                        <div className="mb-3">
+                          <h5 className="font-medium text-gray-900 dark:text-white">
+                            {index + 1}. {element.title || element.question || element.text || 'Domanda'}
+                          </h5>
+                          {element.description && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              {element.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="pl-4 border-l-2 border-blue-500">
+                          <p className="text-gray-800 dark:text-gray-200">
+                            {typeof userResponse === 'string' ? userResponse : 
+                             typeof userResponse === 'number' ? userResponse.toString() :
+                             Array.isArray(userResponse) ? userResponse.join(', ') :
+                             JSON.stringify(userResponse)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  // Se non abbiamo i dettagli dell'esercizio, mostra solo le risposte
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      Dettagli dell'esercizio non disponibili. Mostrando solo le risposte salvate:
+                    </p>
+                    {selectedExercise.responses && Object.entries(selectedExercise.responses).map(([key, value], index) => {
+                      if (value === undefined || value === '') return null;
+                      
+                      return (
+                        <div key={key} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                          <h5 className="font-medium text-gray-900 dark:text-white mb-2">
+                            {key}
+                          </h5>
+                          <div className="pl-4 border-l-2 border-blue-500">
+                            <p className="text-gray-800 dark:text-gray-200">
+                              {typeof value === 'string' ? value : JSON.stringify(value)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {(!selectedExercise.responses || Object.keys(selectedExercise.responses).length === 0) && (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Nessuna risposta trovata per questo esercizio
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {Object.keys(selectedExercise.responses || {}).length} risposte totali
+                {selectedExercise.timeSpent && (
+                  <span> • Durata: {Math.round(selectedExercise.timeSpent / 60)} minuti</span>
+                )}
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => downloadSingleExercisePDF(selectedExercise)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Scarica PDF</span>
+                </button>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
