@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Forza Badge Campione</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-align: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        button {
+            background: #f39c12;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #e67e22;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏆 Forza Badge Campione</h1>
+        <p>Se il badge non funziona, usa questo per forzarlo:</p>
+        
+        <button onclick="forceChampionBadge()">
+            🏆 FORZA BADGE CAMPIONE
+        </button>
+        
+        <button onclick="clearAll()">
+            🗑️ PULISCI TUTTO
+        </button>
+        
+        <button onclick="checkStatus()">
+            📊 CONTROLLA STATUS
+        </button>
+        
+        <div id="result" style="margin-top: 20px; font-family: monospace;"></div>
+    </div>
+
+    <script>
+        function forceChampionBadge() {
+            localStorage.setItem('championBadge', 'true');
+            localStorage.setItem('onboardingCompleted', 'true');
+            localStorage.setItem('initialQuestionnaireCompleted', 'true');
+            localStorage.setItem('welcomeShown', 'true');
+            
+            document.getElementById('result').innerHTML = 
+                '✅ Badge Campione FORZATO!<br>' +
+                '✅ Tutti i flag impostati<br>' +
+                '<strong>Vai alla homepage ora!</strong>';
+            
+            console.log('🏆 BADGE CAMPIONE FORZATO');
+            
+            // Redirect dopo 2 secondi
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+        }
+        
+        function clearAll() {
+            localStorage.removeItem('championBadge');
+            localStorage.removeItem('onboardingCompleted');
+            localStorage.removeItem('initialQuestionnaireCompleted');
+            localStorage.removeItem('welcomeShown');
+            
+            document.getElementById('result').innerHTML = 
+                '🗑️ Tutto pulito!<br>' +
+                'Ricarica per ricominciare da zero';
+            
+            console.log('🗑️ LocalStorage pulito');
+        }
+        
+        function checkStatus() {
+            const badge = localStorage.getItem('championBadge');
+            const onboarding = localStorage.getItem('onboardingCompleted');
+            const questionnaire = localStorage.getItem('initialQuestionnaireCompleted');
+            const welcome = localStorage.getItem('welcomeShown');
+            
+            document.getElementById('result').innerHTML = 
+                '<strong>STATUS ATTUALE:</strong><br>' +
+                `🏆 Badge Campione: <span style="color: ${badge === 'true' ? '#2ecc71' : '#e74c3c'}">${badge || 'null'}</span><br>` +
+                `📋 Onboarding: <span style="color: ${onboarding === 'true' ? '#2ecc71' : '#e74c3c'}">${onboarding || 'null'}</span><br>` +
+                `❓ Questionario: <span style="color: ${questionnaire === 'true' ? '#2ecc71' : '#e74c3c'}">${questionnaire || 'null'}</span><br>` +
+                `👋 Welcome: <span style="color: ${welcome === 'true' ? '#2ecc71' : '#e74c3c'}">${welcome || 'null'}</span>`;
+        }
+        
+        // Check status on load
+        checkStatus();
+    </script>
+</body>
+</html>

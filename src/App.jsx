@@ -5,345 +5,347 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from './config/firebase';
 
-const ProtectedRoute = ({ children, requireAuth = true, skipOnboardingCheck = false, skipWelcomeCheck = false, skipQuestionnaireCheck = false }) => {
+const ProtectedRoute = ({ children, requireAuth = true, skipOnboardingCheck = false }) => {
   const { currentUser, userProfile, isAdmin, loading } = useAuth();
-  const [userBadges, setUserBadges] = useState([]);
-  const [exerciseCount, setExerciseCount] = useState(0);
-  const [badgesLoading, setBadgesLoading] = useState(true);
-  const [exercisesLoading, setExercisesLoading] = useState(true);
-  const onboardingCompleted = localStorage.getItem('onboardingCompleted');
+  const [completedOnboardingExercises, setCompletedOnboardingExercises] = useState(0);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  // Check localStorage flags
   const questionnaireCompleted = localStorage.getItem('initialQuestionnaireCompleted');
   const welcomeShown = localStorage.getItem('welcomeShown');
+  const onboardingCompleted = localStorage.getItem('onboardingCompleted');
+  const championBadge = localStorage.getItem('championBadge');
 
-  // Fetch user badges and exercise responses
   useEffect(() => {
-    const fetchUserData = async () => {
-      if (currentUser && !isAdmin) {
-        let foundBadges = false;
-        let foundExercises = false;
-        
-        // Fetch badges
-        try {
-          const badgesQuery = query(
-            collection(db, 'userBadges'),
-            where('userId', '==', currentUser.uid)
-          );
-          const snapshot = await getDocs(badgesQuery);
-          const badges = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setUserBadges(badges);
-          foundBadges = badges.length > 0;
-        } catch (error) {
-          console.error('Error fetching badges:', error);
-        }
-        
-        // Fetch exercise responses to check if user has completed any exercises
-        try {
-          const exercisesQuery = query(
-            collection(db, 'exerciseResponses'),
-            where('userId', '==', currentUser.uid)
-          );
-          const exerciseSnapshot = await getDocs(exercisesQuery);
-          setExerciseCount(exerciseSnapshot.docs.length);
-          foundExercises = exerciseSnapshot.docs.length > 0;
-        } catch (error) {
-          console.error('Error fetching exercise responses:', error);
-        }
-        
-        // If user has badges, exercises, or is premium, mark questionnaire as completed in localStorage
-        // This ensures existing/premium users don't see the questionnaire
-        if ((foundBadges || foundExercises || userProfile?.isPremium) && !localStorage.getItem('initialQuestionnaireCompleted')) {
-          console.log('Auto-marking questionnaire as completed for existing/premium user', {
-            foundBadges,
-            foundExercises,
-            isPremium: userProfile?.isPremium
-          });
-          localStorage.setItem('initialQuestionnaireCompleted', 'true');
-          localStorage.setItem('onboardingCompleted', 'true');
-          localStorage.setItem('welcomeShown', 'true');
-        }
+    const checkOnboardingProgress = async () => {
+      if (!currentUser || isAdmin) {
+        setDataLoading(false);
+        return;
       }
-      setBadgesLoading(false);
-      setExercisesLoading(false);
+
+      // ⭐ SE HA IL BADGE CAMPIONE, NON CONTROLLARE NULLA!
+      if (championBadge === 'true') {
+        setDataLoading(false);
+        return;
+      }
+
+      try {
+        // Count completed onboarding exercises
+        const responsesQuery = query(
+          collection(db, 'exerciseResponses'),
+          where('userId', '==', currentUser.uid)
+        );
+        const responsesSnapshot = await getDocs(responsesQuery);
+        
+        // Per l'onboarding conta semplicemente tutti gli esercizi completati (max 7 per unlock)
+        const totalCompletedExercises = responsesSnapshot.docs.length;
+        const completedForOnboarding = Math.min(totalCompletedExercises, 7);
+        
+        setCompletedOnboardingExercises(completedForOnboarding);
+        console.log('✅ Onboarding progress:', completedForOnboarding, 'out of 7 required (total completed:', totalCompletedExercises, ')');
+        
+      } catch (error) {
+        console.error('❌ Error checking onboarding progress:', error);
+      } finally {
+        setDataLoading(false);
+      }
     };
 
-    fetchUserData();
-  }, [currentUser, isAdmin]);
-  
-  // Debug existing user check with better date handling
-  let userCreatedAt = null;
-  if (userProfile?.createdAt) {
-    // Handle Firestore Timestamp
-    if (userProfile.createdAt.toDate) {
-      userCreatedAt = userProfile.createdAt.toDate();
-    } 
-    // Handle ISO string
-    else if (typeof userProfile.createdAt === 'string') {
-      userCreatedAt = new Date(userProfile.createdAt);
-    }
-    // Handle seconds (Firestore timestamp format)
-    else if (userProfile.createdAt.seconds) {
-      userCreatedAt = new Date(userProfile.createdAt.seconds * 1000);
-    }
-    // Handle already a Date object
-    else if (userProfile.createdAt instanceof Date) {
-      userCreatedAt = userProfile.createdAt;
-    }
-  }
-  
-  // If no createdAt field or date is in the future, assume existing user
-  const dateIsInFuture = userCreatedAt && userCreatedAt.getTime() > Date.now();
-  
-  // Check if user has badges or completed exercises (indicates they've been using the app)
-  const hasBadges = userBadges && userBadges.length > 0;
-  const hasCompletedExercises = exerciseCount > 0;
-  
-  // User is existing if: has badges, completed exercises, no createdAt, future date, registered > 7 days ago, OR is premium
-  const isExistingUser = hasBadges ||
-                         hasCompletedExercises ||
-                         !userProfile?.createdAt || 
-                         dateIsInFuture || 
-                         userProfile?.isPremium ||
-                         (userCreatedAt && (Date.now() - userCreatedAt.getTime()) > (7 * 24 * 60 * 60 * 1000)); // 7 days
-  const daysSinceRegistration = userCreatedAt ? Math.floor((Date.now() - userCreatedAt.getTime()) / (24 * 60 * 60 * 1000)) : null;
-  
-  console.log('ProtectedRoute DEBUG:', { 
-    currentUser: currentUser?.email, 
-    isAdmin, 
-    userBadges: userBadges.length,
-    hasBadges,
-    exerciseCount,
-    hasCompletedExercises,
-    userProfile_createdAt: userProfile?.createdAt,
-    userProfile_createdAtType: typeof userProfile?.createdAt,
-    userCreatedAt,
-    dateIsInFuture,
-    isPremium: userProfile?.isPremium,
-    isExistingUser,
-    daysSinceRegistration,
-    skipOnboardingCheck,
-    skipQuestionnaireCheck,
-    skipWelcomeCheck,
-    onboardingCompleted,
-    questionnaireCompleted,
-    welcomeShown
-  });
-  
-  if (loading || badgesLoading || exercisesLoading) {
+    checkOnboardingProgress();
+  }, [currentUser, isAdmin, championBadge]);
+
+  if (loading || dataLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
       </div>
     );
   }
-  
+
+  // ⭐ BADGE CAMPIONE = ACCESSO TOTALE (PRIMA DI TUTTO!)
+  if (championBadge === 'true') {
+    console.log('🏆 Badge Campione attivo: accesso garantito a', window.location.pathname);
+    return children;
+  }
+
+  // Admin bypass
+  if (isAdmin) {
+    return children;
+  }
+
+  // Not logged in
   if (requireAuth && !currentUser) {
     return <Navigate to="/login" replace />;
   }
-  
-  // Skip checks for admin users - WAIT for all data to load first
-  if (!isAdmin && currentUser) {
-    // Don't make any redirect decisions until we've checked for badges/exercises
-    // This prevents redirecting on the first render when hasBadges is still false
-    
-    // 1. Onboarding check
-    if (!skipOnboardingCheck) {
-      const isOnboardingComplete = onboardingCompleted === 'true' || userProfile?.onboardingCompleted === true;
-      
-      if (!isOnboardingComplete) {
-        return <Navigate to="/onboarding" replace />;
-      }
-    }
-    
-    // 2. Initial questionnaire check
-    if (!skipQuestionnaireCheck && !skipOnboardingCheck) {
-      const isQuestionnaireComplete = questionnaireCompleted === 'true' || userProfile?.initialQuestionnaireCompleted === true;
-      const isOnboardingComplete = onboardingCompleted === 'true' || userProfile?.onboardingCompleted === true;
-      
-      // Use the already calculated isExistingUser from above
-      if (isOnboardingComplete && !isQuestionnaireComplete && !isExistingUser) {
-        return <Navigate to="/questionnaire/initial" replace />;
-      }
-    }
-    
-    // 3. Welcome page check
-    if (!skipWelcomeCheck && !skipOnboardingCheck && !skipQuestionnaireCheck) {
-      const isOnboardingComplete = onboardingCompleted === 'true' || userProfile?.onboardingCompleted === true;
-      const isQuestionnaireComplete = questionnaireCompleted === 'true' || userProfile?.initialQuestionnaireCompleted === true;
-      
-      // Use the already calculated isExistingUser from above
-      if (isOnboardingComplete && isQuestionnaireComplete && welcomeShown !== 'true' && !isExistingUser) {
-        return <Navigate to="/welcome" replace />;
-      }
-    }
-    
-    // 4. Interactive onboarding check - redirect users with 0 exercises to first step
-    if (!skipOnboardingCheck && !skipQuestionnaireCheck && !skipWelcomeCheck) {
-      const isOnboardingComplete = onboardingCompleted === 'true' || userProfile?.onboardingCompleted === true;
-      const isQuestionnaireComplete = questionnaireCompleted === 'true' || userProfile?.initialQuestionnaireCompleted === true;
-      const isWelcomeShown = welcomeShown === 'true';
-      
-      // If user has completed all intro steps but has never done any exercises, send to interactive onboarding
-      if (isOnboardingComplete && isQuestionnaireComplete && isWelcomeShown && !hasCompletedExercises && !isExistingUser) {
-        // But only if we're trying to access /exercises (the default route)
-        if (window.location.pathname === '/' || window.location.pathname === '/exercises') {
-          return <Navigate to="/onboarding" replace />;
-        }
-      }
-    }
+
+  // Skip all checks if specified
+  if (skipOnboardingCheck) {
+    return children;
   }
-  
+
+  // Flow decisionale semplice:
+  // 1. No questionnaire → go to questionnaire
+  // 2. No welcome → go to welcome  
+  // 3. Onboarding not completed (< 7 exercises OR no flag) → go to onboarding exercises
+  // 4. Everything done → show app
+
+  if (!questionnaireCompleted) {
+    console.log('❌ No questionnaire, redirecting from', window.location.pathname, 'to /questionnaire');
+    return <Navigate to="/questionnaire" replace />;
+  }
+
+  if (!welcomeShown) {
+    console.log('❌ No welcome, redirecting from', window.location.pathname, 'to /welcome');
+    return <Navigate to="/welcome" replace />;
+  }
+
+  // Se non ha ancora completato tutti gli esercizi, vai alla pagina esercizi
+  if (completedOnboardingExercises < 7) {
+    console.log('❌ Only', completedOnboardingExercises, 'exercises, redirecting from', window.location.pathname, 'to /onboarding-exercises');
+    return <Navigate to="/onboarding-exercises" replace />;
+  }
+
+  // Ha completato gli esercizi ma non ha ancora il badge? 
+  // Significa che deve ancora fare le domande finali
+  if (completedOnboardingExercises >= 7 && !championBadge) {
+    console.log('❌ No champion badge, redirecting from', window.location.pathname, 'to /onboarding-questions');
+    return <Navigate to="/onboarding-questions" replace />;
+  }
+
+  // All checks passed - show full app
   return children;
 };
 
-const AdminRoute = ({ children }) => {
-  const { currentUser, isAdmin, loading } = useAuth();
-  
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-  
-  if (!currentUser) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-  
-  return children;
-};
-
-import HomePage from './pages/HomePage';
-import ExercisesWorkspacePage from './pages/ExercisesWorkspacePage';
-import VideosWorkspacePage from './pages/VideosWorkspacePage';
-import AudioWorkspacePage from './pages/AudioWorkspacePage';
-import ArticlesWorkspacePage from './pages/ArticlesWorkspacePage';
-import ArticleReaderPage from './pages/ArticleReaderPage';
-import AudioReaderPage from './pages/AudioReaderPage';
-import ExerciseDetail from './components/ExerciseDetail';
-import ExercisePracticePage from './pages/ExercisePracticePage';
-import OnboardingInteractivePage from './pages/OnboardingInteractivePage';
-import WelcomePage from './pages/WelcomePage';
-import AdminPage from './pages/AdminPage';
-import ProfilePage from './pages/ProfilePage';
-import PremiumPage from './pages/PremiumPage';
+// Import all pages
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import InitialQuestionnairePage from './pages/InitialQuestionnairePage';
-import PremiumQuestionnairePage from './pages/PremiumQuestionnairePage';
+import WelcomePage from './pages/WelcomePage';
+import OnboardingExercisesPage from './pages/OnboardingExercisesPage';
+import OnboardingQuestionsPage from './pages/OnboardingQuestionsPage';
+import ChampionUnlockPage from './pages/ChampionUnlockPage';
+import HomePage from './pages/HomePage';
+import ProfilePage from './pages/ProfilePage';
+import ExercisesPage from './pages/ExercisesPage';
+// import ExerciseDetailPage from './pages/ExerciseDetailPage'; // Non esiste
+import ExercisePracticePage from './pages/ExercisePracticePage';
+import PremiumPage from './pages/PremiumPage';
+import VideosPage from './pages/VideosPage';
+import AudioPage from './pages/AudioPage';
+import AudioDetailPage from './pages/AudioDetailPage';
+import ArticlesPage from './pages/ArticlesPage';
+import ArticleReaderPage from './pages/ArticleReaderPage';
+import VideoDetailPage from './pages/VideoDetailPage';
+import EbooksPage from './pages/EbooksPage';
+import CoursesPage from './pages/CoursesPage';
 import MainLayout from './components/MainLayout';
+import ExerciseDetail from './components/ExerciseDetail';
+import AdminPage from './pages/AdminPage';
+import AdminAudioImages from './pages/AdminAudioImages';
+import AdminArticleImages from './pages/AdminArticleImages';
+import AdminVideoImages from './pages/AdminVideoImages';
+
+function AppContent() {
+  return (
+    <Router>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<RegisterPage />} />
+        
+        {/* Onboarding Routes (no layout) */}
+        <Route path="/questionnaire" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <InitialQuestionnairePage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/welcome" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <WelcomePage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/onboarding-exercises" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <OnboardingExercisesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/onboarding-questions" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <OnboardingQuestionsPage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/champion-unlock" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <ChampionUnlockPage />
+          </ProtectedRoute>
+        } />
+
+        {/* Exercise Practice (standalone, no layout) */}
+        <Route path="/exercises/:id/practice" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <ExercisePracticePage />
+          </ProtectedRoute>
+        } />
+
+        {/* Admin Routes */}
+        <Route path="/admin/*" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <AdminPage />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/admin-audio-images" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <AdminAudioImages />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/admin-article-images" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <AdminArticleImages />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/admin-video-images" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <AdminVideoImages />
+          </ProtectedRoute>
+        } />
+
+        {/* Main App Routes (with layout) */}
+        <Route path="/" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <HomePage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/profile" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <ProfilePage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/exercises" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ExercisesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        {/* Exercise Detail Page - rimuovo temporaneamente */}
+        {/* <Route path="/exercises/:id" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ExerciseDetailPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } /> */}
+        
+        <Route path="/premium" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <PremiumPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Content Routes - Required Champion Badge or onboarding completion */}
+        <Route path="/videos/:id" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <VideoDetailPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/videos" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <VideosPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/audio/:id" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <AudioDetailPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/audio" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <AudioPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/articles/:id" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <ArticleReaderPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/articles" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ArticlesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/ebooks" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <EbooksPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/courses" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <CoursesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Route per esercizi detail */}
+        <Route path="/exercises/:id" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <ExerciseDetail />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Redirect unknown routes to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+}
 
 function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router basename={process.env.NODE_ENV === 'production' && process.env.DEPLOY_TARGET === 'github' ? '/mentalita-app' : ''}>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/onboarding" element={
-              <ProtectedRoute requireAuth={true} skipOnboardingCheck={true}>
-                <OnboardingInteractivePage />
-              </ProtectedRoute>
-            } />
-            <Route path="/questionnaire/initial" element={
-              <ProtectedRoute requireAuth={true} skipOnboardingCheck={true} skipQuestionnaireCheck={true} skipWelcomeCheck={true}>
-                <InitialQuestionnairePage />
-              </ProtectedRoute>
-            } />
-            <Route path="/questionnaire/premium" element={
-              <ProtectedRoute requireAuth={true} skipOnboardingCheck={true} skipQuestionnaireCheck={true} skipWelcomeCheck={true}>
-                <PremiumQuestionnairePage />
-              </ProtectedRoute>
-            } />
-            <Route path="/welcome" element={
-              <ProtectedRoute requireAuth={true} skipOnboardingCheck={true} skipQuestionnaireCheck={true} skipWelcomeCheck={true}>
-                <WelcomePage />
-              </ProtectedRoute>
-            } />
-            <Route path="/" element={
-              <MainLayout>
-                <ProtectedRoute><Navigate to="/exercises" replace /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/dashboard" element={
-              <MainLayout>
-                <ProtectedRoute><HomePage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/exercises" element={
-              <MainLayout>
-                <ProtectedRoute><ExercisesWorkspacePage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/exercises/:id" element={
-              <MainLayout>
-                <ProtectedRoute><ExerciseDetail /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/exercises/:id/practice" element={
-              <ProtectedRoute><ExercisePracticePage /></ProtectedRoute>
-            } />
-            <Route path="/videos" element={
-              <MainLayout>
-                <ProtectedRoute><VideosWorkspacePage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/videos/:id" element={
-              <MainLayout>
-                <ProtectedRoute>
-                  <div className="p-4 text-center">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Video Player</h2>
-                  </div>
-                </ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/audio" element={
-              <MainLayout>
-                <ProtectedRoute><AudioWorkspacePage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/audio/:id" element={
-              <ProtectedRoute>
-                <AudioReaderPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/articles" element={
-              <MainLayout>
-                <ProtectedRoute><ArticlesWorkspacePage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/articles/:id" element={
-              <ProtectedRoute>
-                <ArticleReaderPage />
-              </ProtectedRoute>
-            } />
-            <Route path="/profile" element={
-              <MainLayout>
-                <ProtectedRoute><ProfilePage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/premium" element={
-              <MainLayout>
-                <ProtectedRoute><PremiumPage /></ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/settings" element={
-              <MainLayout>
-                <ProtectedRoute>
-                  <div className="p-4 text-center">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Impostazioni</h2>
-                  </div>
-                </ProtectedRoute>
-              </MainLayout>
-            } />
-            <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-          </Routes>
-        </Router>
+        <AppContent />
       </AuthProvider>
     </ThemeProvider>
   );

@@ -23,7 +23,8 @@ import {
   User,
   Clock,
   ExternalLink,
-  Video
+  Video,
+  Image
 } from 'lucide-react';
 
 const VideoManager = () => {
@@ -251,13 +252,22 @@ const VideoManager = () => {
             Gestione Video
           </h2>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Nuovo Video</span>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.open('/admin-video-images', '_blank')}
+            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Image className="h-4 w-4" />
+            <span>Gestisci Immagini</span>
+          </button>
+          <button
+            onClick={() => openModal()}
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Nuovo Video</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

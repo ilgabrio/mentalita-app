@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Play, Video, Headphones, FileText, Menu, X, Crown, User } from 'lucide-react';
+import { Play, Video, Headphones, FileText, Menu, X, Crown, User, Book, GraduationCap, Home } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const SideNav = () => {
@@ -8,15 +8,20 @@ const SideNav = () => {
   const { userProfile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   
-  // Check if onboarding is completed
-  const isOnboardingCompleted = userProfile?.onboardingCompleted === true || 
+  // Check if onboarding is completed OR if user has Champion badge
+  const championBadge = localStorage.getItem('championBadge') === 'true';
+  const isOnboardingCompleted = championBadge || // Champion badge bypassa tutto
+                               userProfile?.onboardingCompleted === true || 
                                localStorage.getItem('onboardingCompleted') === 'true';
   
   const allNavItems = [
+    { path: '/', icon: Home, label: 'Home', key: 'home' },
     { path: '/exercises', icon: Play, label: 'Esercizi', key: 'exercises' },
     { path: '/videos', icon: Video, label: 'Video', key: 'videos', requiresOnboarding: true },
     { path: '/audio', icon: Headphones, label: 'Audio', key: 'audio', requiresOnboarding: true },
-    { path: '/articles', icon: FileText, label: 'Articoli', key: 'articles', requiresOnboarding: true }
+    { path: '/articles', icon: FileText, label: 'Articoli', key: 'articles', requiresOnboarding: true },
+    { path: '/ebooks', icon: Book, label: 'Ebook', key: 'ebooks', requiresOnboarding: true },
+    { path: '/courses', icon: GraduationCap, label: 'Corsi', key: 'courses', requiresOnboarding: true }
   ];
   
   // Filter nav items based on onboarding completion
@@ -97,7 +102,10 @@ const SideNav = () => {
           {!userProfile?.isPremium && (
             <Link
               to="/premium"
-              onClick={closeSidebar}
+              onClick={() => {
+                console.log('🔗 Sidebar Premium: verso /premium');
+                closeSidebar();
+              }}
               className="flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-amber-600 dark:text-amber-500 hover:text-amber-800 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20"
             >
               <Crown size={20} />
@@ -107,13 +115,18 @@ const SideNav = () => {
           
           {navItems.map((item) => {
             const IconComponent = item.icon;
-            const isActive = location.pathname.startsWith(item.path);
+            const isActive = item.path === '/' 
+              ? location.pathname === '/' 
+              : location.pathname.startsWith(item.path);
             
             return (
               <Link
                 key={item.key}
                 to={item.path}
-                onClick={closeSidebar}
+                onClick={() => {
+                  console.log('🔗 Sidebar navigazione:', item.label, 'verso', item.path);
+                  closeSidebar();
+                }}
                 className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
                   isActive 
                     ? userProfile?.isPremium 

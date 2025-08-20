@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import { 
   Plus, 
@@ -14,7 +14,8 @@ import {
   Type,
   List,
   CheckSquare,
-  MessageSquare
+  MessageSquare,
+  Music
 } from 'lucide-react';
 
 const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
@@ -22,6 +23,7 @@ const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
   const [saving, setSaving] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [previewAnswers, setPreviewAnswers] = useState({});
+  const [availableAudios, setAvailableAudios] = useState([]);
 
   useEffect(() => {
     if (exercise) {
@@ -38,7 +40,38 @@ const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
       });
       setPreviewAnswers(initialAnswers);
     }
+    
+    // Carica gli audio disponibili
+    fetchAvailableAudios();
   }, [exercise]);
+
+  const fetchAvailableAudios = async () => {
+    try {
+      const audiosQuery = query(
+        collection(db, 'audioContent'),
+        orderBy('title', 'asc')
+      );
+      const snapshot = await getDocs(audiosQuery);
+      const audiosData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAvailableAudios(audiosData);
+    } catch (error) {
+      console.error('Error loading audios:', error);
+      // Fallback without orderBy
+      try {
+        const snapshot = await getDocs(collection(db, 'audioContent'));
+        const audiosData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setAvailableAudios(audiosData);
+      } catch (fallbackError) {
+        console.error('Fallback audio loading failed:', fallbackError);
+      }
+    }
+  };
 
   const generateElementId = () => {
     return `element_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -48,9 +81,10 @@ const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
     const newElement = {
       id: generateElementId(),
       type,
-      title: `Nuova ${type === 'text' ? 'domanda' : type === 'select' ? 'selezione' : type === 'radio' ? 'scelta multipla' : 'area di testo'}`,
+      title: `Nuova ${type === 'text' ? 'domanda' : type === 'select' ? 'selezione' : type === 'radio' ? 'scelta multipla' : type === 'audio' ? 'traccia audio' : 'area di testo'}`,
       description: '',
-      options: type === 'select' || type === 'radio' ? ['Opzione 1', 'Opzione 2'] : []
+      options: type === 'select' || type === 'radio' ? ['Opzione 1', 'Opzione 2'] : [],
+      audioId: type === 'audio' ? '' : undefined
     };
     setElements([...elements, newElement]);
   };
@@ -228,6 +262,32 @@ const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
               </div>
             </div>
           )}
+
+          {/* Selezione audio per elementi audio */}
+          {element.type === 'audio' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Seleziona Audio
+              </label>
+              <select
+                value={element.audioId || ''}
+                onChange={(e) => updateElement(index, 'audioId', e.target.value)}
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+              >
+                <option value="">Seleziona un audio...</option>
+                {availableAudios.map((audio) => (
+                  <option key={audio.id} value={audio.id}>
+                    {audio.title} {audio.duration && `(${audio.duration})`}
+                  </option>
+                ))}
+              </select>
+              {availableAudios.length === 0 && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  Nessun audio disponibile. Crea prima alcuni audio nella sezione Audio.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -331,6 +391,50 @@ const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
                 </label>
               ))}
             </div>
+          </div>
+        );
+
+      case 'audio':
+        const selectedAudio = availableAudios.find(audio => audio.id === element.audioId);
+        return (
+          <div key={element.id} className="mb-6">
+            <label className="block text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              {element.title || `Audio ${index + 1}`}
+            </label>
+            {element.description && (
+              <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm">
+                {element.description}
+              </p>
+            )}
+            {selectedAudio ? (
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <Music className="h-6 w-6 text-blue-500" />
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">{selectedAudio.title}</h4>
+                    {selectedAudio.duration && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Durata: {selectedAudio.duration}</p>
+                    )}
+                  </div>
+                </div>
+                {selectedAudio.audioUrl ? (
+                  <audio controls className="w-full">
+                    <source src={selectedAudio.audioUrl} type="audio/mpeg" />
+                    Il tuo browser non supporta l'elemento audio.
+                  </audio>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                    <Music className="h-8 w-8 mx-auto mb-2" />
+                    <p>URL audio non disponibile</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-center">
+                <Music className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-gray-500 dark:text-gray-400">Nessun audio selezionato</p>
+              </div>
+            )}
           </div>
         );
 
@@ -450,6 +554,13 @@ const ExerciseFormEditor = ({ exercise, onClose, onSave }) => {
                   >
                     <CheckSquare className="h-4 w-4" />
                     Scelta Multipla
+                  </button>
+                  <button
+                    onClick={() => addElement('audio')}
+                    className="flex items-center gap-2 px-3 py-2 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/30"
+                  >
+                    <Music className="h-4 w-4" />
+                    Audio Player
                   </button>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, Eye, User, Download, Share2, BookmarkPlus, BookmarkCheck, Printer, Calendar } from 'lucide-react';
+import { ArrowLeft, Clock, Eye, User, Download, Share2, BookmarkPlus, BookmarkCheck, Printer, Calendar, FileText } from 'lucide-react';
 import { db } from '../config/firebase';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 import DOMPurify from 'dompurify';
@@ -16,6 +16,7 @@ const ArticleReaderPage = () => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [viewsUpdated, setViewsUpdated] = useState(false);
 
+  // Carica articolo reale da Firebase
   useEffect(() => {
     const fetchArticle = async () => {
       try {
@@ -64,73 +65,34 @@ const ArticleReaderPage = () => {
     }
   }, [id, viewsUpdated]);
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    const articleDate = date instanceof Date ? date : date.toDate();
-    return articleDate.toLocaleDateString('it-IT', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-  };
-
-  const formatViews = (views) => {
-    if (!views) return '0';
-    if (views >= 1000) {
-      return `${(views / 1000).toFixed(1)}k`;
-    }
-    return views.toString();
-  };
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleShare = async () => {
-    if (navigator.share && article) {
-      try {
-        await navigator.share({
-          title: article.title,
-          text: article.description,
-          url: window.location.href
-        });
-      } catch (error) {
-        console.log('Condivisione annullata');
-      }
-    } else {
-      // Fallback per browser che non supportano Web Share API
-      navigator.clipboard.writeText(window.location.href);
-      alert('Link copiato negli appunti!');
-    }
-  };
-
-  const toggleBookmark = () => {
-    setIsBookmarked(!isBookmarked);
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Caricamento articolo...</p>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error || !article) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 text-6xl mb-4">📄</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Articolo non trovato</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+        <div className="text-center max-w-md mx-auto p-8">
+          <div className="w-16 h-16 mx-auto mb-4 text-gray-300">
+            <FileText className="w-full h-full" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {error || 'Articolo non trovato'}
+          </h2>
+          <p className="text-gray-600 mb-6">
+            L'articolo che stai cercando non è disponibile o non esiste.
+          </p>
           <button
             onClick={() => navigate('/articles')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+            className="bg-green-500 hover:bg-green-600 text-white px-6 py-3 rounded-lg font-medium transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
             Torna agli articoli
           </button>
         </div>
@@ -138,88 +100,52 @@ const ArticleReaderPage = () => {
     );
   }
 
-  if (!article) {
-    return null;
-  }
-
+  // DESIGN MODERNO ARTICOLO
   return (
     <div className="min-h-screen bg-white">
-      {/* Header con navigazione */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 z-10 print:hidden">
+      {/* Header con back button */}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => navigate('/articles')}
-              className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="font-medium">Torna agli articoli</span>
-            </button>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handlePrint}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                title="Stampa articolo"
-              >
-                <Printer className="h-5 w-5" />
-              </button>
-              
-              <button
-                onClick={handleShare}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                title="Condividi articolo"
-              >
-                <Share2 className="h-5 w-5" />
-              </button>
-              
-              <button
-                onClick={toggleBookmark}
-                className={`p-2 transition-colors ${
-                  isBookmarked 
-                    ? 'text-green-500 hover:text-green-600' 
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-                title={isBookmarked ? 'Rimuovi dai segnalibri' : 'Aggiungi ai segnalibri'}
-              >
-                {isBookmarked ? (
-                  <BookmarkCheck className="h-5 w-5" />
-                ) : (
-                  <BookmarkPlus className="h-5 w-5" />
-                )}
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={() => navigate('/articles')}
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors group"
+          >
+            <ArrowLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
+            <span className="font-medium">Torna agli articoli</span>
+          </button>
         </div>
       </div>
 
       {/* Contenuto principale */}
       <article className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header dell'articolo */}
-        <header className="mb-8">
-          {/* Categoria */}
-          {article.category && (
-            <div className="mb-4">
-              <span className="inline-block px-3 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-full">
-                {article.category}
-              </span>
-            </div>
-          )}
-          
-          {/* Titolo */}
-          <h1 className="text-4xl font-bold text-gray-900 mb-4 leading-tight print:text-3xl">
-            {article.title}
-          </h1>
-          
-          {/* Sottotitolo/Descrizione */}
-          {article.description && (
-            <p className="text-xl text-gray-600 mb-6 leading-relaxed">
-              {article.description}
-            </p>
-          )}
-          
-          {/* Meta informazioni */}
-          <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500 pb-6 border-b border-gray-200">
+        {/* Hero Image */}
+        {article.imageUrl && (
+          <div className="mb-8">
+            <img 
+              src={article.imageUrl} 
+              alt={article.title}
+              className="w-full h-[300px] md:h-[400px] object-cover rounded-xl shadow-lg"
+            />
+          </div>
+        )}
+
+        {/* Categoria */}
+        {article.category && (
+          <div className="mb-4">
+            <span className="inline-flex items-center px-3 py-1 text-sm font-medium text-green-700 bg-green-100 rounded-full">
+              {article.category}
+            </span>
+          </div>
+        )}
+
+        {/* Titolo */}
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+          {article.title}
+        </h1>
+
+        {/* Meta info */}
+        {(article.author || article.publishedAt || article.readTime) && (
+          <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500 mb-8 pb-6 border-b border-gray-100">
             {article.author && (
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -230,7 +156,13 @@ const ArticleReaderPage = () => {
             {article.publishedAt && (
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
-                <span>{formatDate(article.publishedAt)}</span>
+                <span>
+                  {new Date(article.publishedAt?.seconds ? article.publishedAt.seconds * 1000 : article.publishedAt).toLocaleDateString('it-IT', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </span>
               </div>
             )}
             
@@ -240,169 +172,121 @@ const ArticleReaderPage = () => {
                 <span>{article.readTime} di lettura</span>
               </div>
             )}
-            
-            <div className="flex items-center gap-2">
-              <Eye className="h-4 w-4" />
-              <span>{formatViews(article.views || 0)} visualizzazioni</span>
-            </div>
           </div>
-        </header>
+        )}
 
-        {/* Contenuto dell'articolo */}
-        <div className="prose prose-lg max-w-none">
-          {article.content ? (
-            <div
-              className="article-content leading-relaxed text-gray-900"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(article.content, {
-                  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'a', 'img'],
-                  ALLOWED_ATTR: ['href', 'target', 'src', 'alt', 'title', 'class']
-                })
+        {/* Sottotitolo/Descrizione */}
+        {article.description && (
+          <div className="mb-8">
+            <p className="text-xl text-gray-700 leading-relaxed font-light">
+              {article.description}
+            </p>
+          </div>
+        )}
+
+        {/* Contenuto articolo */}
+        {article.content && (
+          <div className="prose prose-lg prose-green max-w-none mb-12">
+            <div 
+              className="leading-relaxed text-gray-800"
+              dangerouslySetInnerHTML={{ 
+                __html: DOMPurify.sanitize(article.content) 
               }}
             />
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-gray-500">Contenuto dell'articolo non disponibile.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer dell'articolo */}
-        <footer className="mt-12 pt-8 border-t border-gray-200 print:hidden">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={toggleBookmark}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                  isBookmarked
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {isBookmarked ? (
-                  <>
-                    <BookmarkCheck className="h-4 w-4" />
-                    Salvato
-                  </>
-                ) : (
-                  <>
-                    <BookmarkPlus className="h-4 w-4" />
-                    Salva articolo
-                  </>
-                )}
-              </button>
-              
-              <button
-                onClick={handleShare}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <Share2 className="h-4 w-4" />
-                Condividi
-              </button>
-            </div>
-            
-            <button
-              onClick={() => navigate('/articles')}
-              className="inline-flex items-center gap-2 px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-            >
-              Leggi altri articoli
-            </button>
           </div>
-        </footer>
+        )}
+
+        {/* Footer con CTA */}
+        <div className="bg-gray-50 rounded-xl p-8 text-center">
+          <h3 className="text-xl font-semibold text-gray-900 mb-3">
+            Ti è piaciuto questo articolo?
+          </h3>
+          <p className="text-gray-600 mb-6">
+            Scopri altri contenuti per migliorare la tua mentalità sportiva
+          </p>
+          <button
+            onClick={() => navigate('/articles')}
+            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors shadow-lg hover:shadow-xl"
+          >
+            Leggi altri articoli
+          </button>
+        </div>
       </article>
 
+      {/* Stili personalizzati */}
       <style jsx>{`
-        @media print {
-          .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-            break-after: avoid;
-            color: #111827 !important;
-          }
-          
-          .prose p {
-            orphans: 3;
-            widows: 3;
-            color: #374151 !important;
-          }
-          
-          .prose {
-            font-size: 11pt;
-            line-height: 1.4;
-          }
-          
-          .article-content {
-            column-count: 1;
-          }
-          
-          @page {
-            margin: 2cm;
-          }
-        }
-        
-        .prose {
-          font-family: 'Georgia', 'Times New Roman', serif;
-        }
-        
         .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-          font-family: system-ui, -apple-system, sans-serif;
-          font-weight: 700;
           color: #111827;
-          margin-top: 2em;
+          font-weight: 700;
+          margin-top: 2.5em;
           margin-bottom: 1em;
-        }
-        
-        .prose h1 {
-          font-size: 2.25em;
-          line-height: 1.2;
         }
         
         .prose h2 {
           font-size: 1.875em;
-          line-height: 1.3;
+          line-height: 1.2;
         }
         
         .prose h3 {
           font-size: 1.5em;
-          line-height: 1.4;
+          line-height: 1.3;
         }
         
         .prose p {
-          margin-bottom: 1.5em;
+          margin-bottom: 1.75em;
+          line-height: 1.8;
           text-align: justify;
-          hyphens: auto;
         }
         
         .prose blockquote {
           border-left: 4px solid #10b981;
-          padding-left: 1.5em;
+          padding: 1.5em 2em;
           margin: 2em 0;
+          background: #f0fdfa;
           font-style: italic;
-          color: #6b7280;
+          color: #374151;
+          border-radius: 0 8px 8px 0;
         }
         
         .prose ul, .prose ol {
-          margin: 1.5em 0;
+          margin: 1.75em 0;
           padding-left: 2em;
         }
         
         .prose li {
-          margin-bottom: 0.5em;
+          margin-bottom: 0.75em;
+          line-height: 1.7;
         }
         
         .prose a {
           color: #10b981;
           text-decoration: underline;
+          font-weight: 500;
         }
         
         .prose a:hover {
           color: #059669;
         }
         
+        .prose strong {
+          color: #111827;
+          font-weight: 700;
+        }
+        
         .prose img {
           max-width: 100%;
           height: auto;
-          margin: 2em 0;
-          border-radius: 8px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          margin: 2.5em 0;
+          border-radius: 12px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .prose code {
+          background: #f3f4f6;
+          padding: 0.25em 0.5em;
+          border-radius: 4px;
+          font-size: 0.9em;
+          color: #374151;
         }
       `}</style>
     </div>

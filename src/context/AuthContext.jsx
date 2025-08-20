@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
 const AuthContext = createContext();
@@ -28,7 +28,15 @@ export const AuthProvider = ({ children }) => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const login = async (email, password) => {
-    return await signInWithEmailAndPassword(auth, email, password);
+    try {
+      console.log('📱 Attempting login...');
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log('📱 Login successful');
+      return result;
+    } catch (error) {
+      console.error('📱 Login error:', error.code, error.message);
+      throw error;
+    }
   };
 
   const loginWithGoogle = async () => {
@@ -94,6 +102,24 @@ export const AuthProvider = ({ children }) => {
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (userDoc.exists()) {
         const profile = userDoc.data();
+        
+        // Se il campo initialQuestionnaireCompleted non esiste, controlla se ha fatto il questionario
+        if (!profile.initialQuestionnaireCompleted) {
+          try {
+            const questionnaireDoc = await getDoc(doc(db, 'users', uid, 'questionnaires', 'initial'));
+            if (questionnaireDoc.exists()) {
+              console.log('📋 Found completed questionnaire in subcollection');
+              profile.initialQuestionnaireCompleted = true;
+              // Aggiorna il documento principale
+              await updateDoc(doc(db, 'users', uid), {
+                initialQuestionnaireCompleted: true
+              });
+            }
+          } catch (error) {
+            console.log('Could not check questionnaire subcollection:', error);
+          }
+        }
+        
         setUserProfile(profile);
         const adminStatus = profile.isAdmin === true || profile.email === 'ilgabrio@gmail.com';
         console.log('DEBUG Admin check:', {
@@ -120,7 +146,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    console.log('📱 Setting up auth listener...');
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('📱 Auth state changed:', user ? user.email : 'null');
       setCurrentUser(user);
       
       if (user) {
@@ -130,6 +158,7 @@ export const AuthProvider = ({ children }) => {
           setIsAdmin(true);
         }
         
+        console.log('📱 Fetching user profile...');
         await fetchUserProfile(user.uid);
       } else {
         setUserProfile(null);

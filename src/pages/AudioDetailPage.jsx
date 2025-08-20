@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Clock, User, PlayCircle, Download, Share } from 'lucide-react';
+import { ArrowLeft, Clock, User, PlayCircle, Download, Share, Play } from 'lucide-react';
 import { db } from '../config/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import AudioPlayer from '../components/AudioPlayer';
@@ -15,6 +15,32 @@ const AudioDetailPage = () => {
 
   useEffect(() => {
     const fetchAudio = async () => {
+      try {
+        // CARICA AUDIO REALE
+        const audioDoc = await getDoc(doc(db, 'audioContent', id));
+        if (audioDoc.exists()) {
+          const realAudio = { id: audioDoc.id, ...audioDoc.data() };
+          setAudio(realAudio);
+          console.log('🎵 Audio reale caricato:', realAudio);
+        } else {
+          // Fallback
+          setAudio({
+            id: id,
+            title: `Audio ${id}`,
+            description: 'Audio non trovato nel database'
+          });
+        }
+      } catch (error) {
+        console.error('Errore:', error);
+        setAudio({
+          id: id,
+          title: `Audio ${id}`,
+          description: 'Errore nel caricamento'
+        });
+      }
+      setLoading(false);
+      return; // SKIP tutto il caricamento vecchio
+      
       try {
         console.log('🎵 Loading audio with ID:', id);
         
@@ -205,6 +231,89 @@ const AudioDetailPage = () => {
     );
   }
 
+  // APPROCCIO SEMPLICE: SOLO LINK DIRETTO
+  console.log('🔍 RENDER CHECK - audio:', audio);
+  console.log('🔍 RENDER CHECK - audioUrl:', audio?.audioUrl);
+  console.log('🔍 RENDER CHECK - url:', audio?.url);
+  
+  if (audio?.audioUrl || audio?.url) {
+    console.log('🟢 RENDERING AUDIO PAGE');
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+            {audio.title}
+          </h1>
+          
+          {/* Immagine Audio */}
+          {audio.imageUrl && (
+            <div className="mb-6">
+              <img 
+                src={audio.imageUrl} 
+                alt={audio.title}
+                className="w-full max-w-sm mx-auto rounded-lg shadow-lg object-cover"
+                style={{ aspectRatio: '1/1', maxHeight: '300px' }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+          
+          <div className="bg-blue-100 dark:bg-blue-900 rounded-lg p-4 mb-6">
+            <p className="text-blue-800 dark:text-blue-200 text-sm mb-2">
+              Clicca qui per ascoltare l'audio:
+            </p>
+            <a 
+              href={audio.audioUrl || audio.url} 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg inline-flex items-center gap-2 text-lg font-semibold"
+            >
+              <Play className="h-5 w-5" />
+              Ascolta Audio
+            </a>
+          </div>
+          
+          {audio.description && (
+            <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm">
+              {audio.description}
+            </p>
+          )}
+          
+          <button
+            onClick={() => navigate('/audio')}
+            className="bg-gray-500 hover:bg-gray-600 text-white px-6 py-2 rounded-lg"
+          >
+            Torna agli Audio
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('🔴 NO AUDIO URL - showing fallback');
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+          FALLBACK: {audio?.title || `Audio ${id}`}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-300 mb-4">
+          Audio URL non disponibile
+        </p>
+        <button
+          onClick={() => navigate('/audio')}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg"
+        >
+          Torna agli Audio
+        </button>
+      </div>
+    </div>
+  );
+  
+  return null; // Skip tutto il resto
+  
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}

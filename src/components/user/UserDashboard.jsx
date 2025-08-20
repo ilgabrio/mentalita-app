@@ -44,31 +44,87 @@ const UserDashboard = () => {
     }
   }, [currentUser]);
 
+  // Logica di redirect rimossa - ora gestita dal ProtectedRoute
+
   const fetchDashboardData = async () => {
     try {
+      console.log('🏠 UserDashboard: Inizio caricamento dati...');
       setLoading(true);
 
       // Fetch published exercises ordered by order
-      const exercisesQuery = query(
-        collection(db, 'exercises'),
-        where('isPublished', '==', true),
-        orderBy('order', 'asc')
-      );
-      
-      const exercisesSnapshot = await getDocs(exercisesQuery);
-      const exercisesData = exercisesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setExercises(exercisesData);
-
-      // Fetch user progress
-      const progressDoc = await getDoc(doc(db, 'userProgress', currentUser.uid));
-      if (progressDoc.exists()) {
-        setUserProgress(progressDoc.data());
+      console.log('📋 Caricamento esercizi...');
+      try {
+        const exercisesQuery = query(
+          collection(db, 'exercises'),
+          where('isPublished', '==', true),
+          orderBy('order', 'asc')
+        );
+        
+        const exercisesSnapshot = await getDocs(exercisesQuery);
+        const exercisesData = exercisesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setExercises(exercisesData);
+        console.log('✅ Esercizi caricati:', exercisesData.length);
+      } catch (exerciseError) {
+        console.error('❌ Errore caricamento esercizi:', exerciseError);
+        // Continua con gli altri dati anche se gli esercizi falliscono
       }
 
-      // Fetch completed exercise sessions
+      // Fetch user progress
+      console.log('📊 Caricamento progresso utente...');
+      try {
+        const progressDoc = await getDoc(doc(db, 'userProgress', currentUser.uid));
+        if (progressDoc.exists()) {
+          setUserProgress(progressDoc.data());
+          console.log('✅ Progresso utente caricato');
+        }
+      } catch (progressError) {
+        console.error('❌ Errore caricamento progresso:', progressError);
+      }
+
+      // DOPO gli esercizi, carica le sessioni e arricchiscile
+      console.log('🎯 Caricamento sessioni completate...');
+      await loadCompletedSessions(exercisesData);
+
+      // Fetch a motivational tip (if available)
+      console.log('💡 Caricamento tip motivazionali...');
+      try {
+        const tipsQuery = query(
+          collection(db, 'motivationalTips'),
+          where('active', '==', true)
+        );
+        
+        const tipsSnapshot = await getDocs(tipsQuery);
+        if (!tipsSnapshot.empty) {
+          const userLevel = userProfile?.userLevel || 1;
+          // Filter and sort on client side to avoid composite index requirement
+          const tips = tipsSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(tip => tip.userLevel <= userLevel)
+            .sort((a, b) => (b.priority || 0) - (a.priority || 0));
+            
+          if (tips.length > 0) {
+            const randomTip = tips[Math.floor(Math.random() * tips.length)];
+            setMotivationalTip(randomTip);
+            console.log('✅ Tip motivazionale caricato');
+          }
+        }
+      } catch (tipsError) {
+        console.error('❌ Errore caricamento tips:', tipsError);
+      }
+
+      console.log('🏠 UserDashboard: Caricamento completato');
+    } catch (error) {
+      console.error('❌ Errore generale dashboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCompletedSessions = async (exercisesData) => {
+    try {
       const sessionsQuery = query(
         collection(db, 'exerciseSessions'),
         where('userId', '==', currentUser.uid),
@@ -81,52 +137,86 @@ const UserDashboard = () => {
         id: doc.id,
         ...doc.data()
       }));
-      setCompletedExercises(completedData);
-
-      // Fetch a motivational tip (if available)
-      const userLevel = userProfile?.userLevel || 1;
-      const tipsQuery = query(
-        collection(db, 'motivationalTips'),
-        where('userLevel', '<=', userLevel),
-        where('active', '==', true),
-        orderBy('priority', 'desc')
+      
+      // Debug: vediamo cosa contengono le sessioni
+      console.log('🔍 Sessioni completate RAW:', completedData);
+      console.log('🔍 Esercizi disponibili per arricchimento:', exercisesData.length);
+      
+      // Arricchiamo le sessioni con i titoli degli esercizi
+      const enrichedSessions = await Promise.all(
+        completedData.map(async (session) => {
+          try {
+            // Trova l'esercizio corrispondente
+            const exercise = exercisesData.find(ex => ex.id === session.exerciseId);
+            if (exercise) {
+              console.log('✅ Esercizio trovato:', exercise.title);
+              return {
+                ...session,
+                exerciseTitle: exercise.title,
+                exerciseDifficulty: exercise.difficulty
+              };
+            } else {
+              // Se non trovato negli esercizi caricati, prova a caricarlo da Firebase
+              console.log('🔍 Cerco esercizio in Firebase:', session.exerciseId);
+              const exerciseDoc = await getDoc(doc(db, 'exercises', session.exerciseId));
+              if (exerciseDoc.exists()) {
+                const exerciseData = exerciseDoc.data();
+                console.log('✅ Esercizio trovato in Firebase:', exerciseData.title);
+                return {
+                  ...session,
+                  exerciseTitle: exerciseData.title || 'Esercizio sconosciuto',
+                  exerciseDifficulty: exerciseData.difficulty
+                };
+              }
+            }
+            console.log('❌ Esercizio non trovato per:', session.exerciseId);
+            return {
+              ...session,
+              exerciseTitle: `Esercizio ${session.exerciseId}`,
+              exerciseDifficulty: 'N/A'
+            };
+          } catch (error) {
+            console.error('❌ Errore arricchimento sessione:', error);
+            return {
+              ...session,
+              exerciseTitle: 'Esercizio',
+              exerciseDifficulty: 'N/A'
+            };
+          }
+        })
       );
       
-      const tipsSnapshot = await getDocs(tipsQuery);
-      if (!tipsSnapshot.empty) {
-        const tips = tipsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const randomTip = tips[Math.floor(Math.random() * tips.length)];
-        setMotivationalTip(randomTip);
-      }
-
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
+      setCompletedExercises(enrichedSessions);
+      console.log('✅ Sessioni arricchite caricate:', enrichedSessions.length);
+      console.log('🔍 Prima sessione arricchita:', enrichedSessions[0]);
+    } catch (sessionsError) {
+      console.error('❌ Errore caricamento sessioni:', sessionsError);
     }
   };
 
   const startExercise = async (exercise) => {
     try {
-      // Create new exercise session
-      const sessionData = {
-        userId: currentUser.uid,
-        exerciseId: exercise.id,
-        exerciseTitle: exercise.title,
-        startTime: new Date(),
-        completed: false,
-        progress: 0
-      };
-
-      const sessionRef = await addDoc(collection(db, 'exerciseSessions'), sessionData);
-      
-      // Navigate to exercise detail
-      navigate(`/exercises/${exercise.id}`, { 
-        state: { sessionId: sessionRef.id, exercise } 
-      });
+      // Navigate to exercise practice page
+      navigate(`/exercises/${exercise.id}/practice`);
     } catch (error) {
       console.error('Error starting exercise:', error);
       alert('Errore nell\'avvio dell\'esercizio');
+    }
+  };
+
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'principiante':
+      case 'facile':
+        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+      case 'intermedio':
+      case 'medio':
+        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+      case 'avanzato':
+      case 'difficile':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
     }
   };
 
@@ -312,9 +402,9 @@ const UserDashboard = () => {
         )}
 
         {/* Available Exercises */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               Esercizi Disponibili
             </h2>
             <div className="flex items-center space-x-3">
@@ -327,9 +417,13 @@ const UserDashboard = () => {
                   <span>Premium</span>
                 </button>
               )}
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {exercises.length} esercizi totali
-              </span>
+              <button
+                onClick={() => navigate('/exercises')}
+                className="flex items-center space-x-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
+              >
+                <ArrowRight className="h-4 w-4" />
+                <span>Vedi tutti</span>
+              </button>
             </div>
           </div>
 
@@ -345,60 +439,112 @@ const UserDashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {exercises.map((exercise) => {
+              {exercises.slice(0, 6).map((exercise) => {
                 const isCompleted = getExerciseStatus(exercise.id);
                 
                 return (
                   <div
                     key={exercise.id}
-                    className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:shadow-md transition-all duration-200"
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 transform hover:scale-105 cursor-pointer"
+                    onClick={() => startExercise(exercise)}
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
-                          {exercise.title}
-                        </h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                          {exercise.description}
-                        </p>
+                    {/* Cover Image */}
+                    <div className="relative h-48 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
+                      {exercise.coverImage ? (
+                        <img 
+                          src={exercise.coverImage} 
+                          alt={exercise.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="text-white text-center">
+                            <div className="text-6xl mb-2">💪</div>
+                            <div className="text-sm font-medium opacity-75">{exercise.category || 'Generale'}</div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Category Badge */}
+                      <div className="absolute top-4 left-4">
+                        <span className="px-3 py-1 bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-bold rounded-full">
+                          {exercise.category || 'Generale'}
+                        </span>
                       </div>
+                      
+                      {/* Completed Badge */}
                       {isCompleted && (
-                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 ml-2" />
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400 mb-4">
-                      {exercise.category && (
-                        <div className="flex items-center space-x-1">
-                          <BookOpen className="h-3 w-3" />
-                          <span>{exercise.category}</span>
+                        <div className="absolute top-4 right-4">
+                          <div className="bg-green-500 text-white p-2 rounded-full">
+                            <CheckCircle className="h-5 w-5" />
+                          </div>
                         </div>
                       )}
+                      
+                      {/* Difficulty Badge */}
                       {exercise.difficulty && (
-                        <div className="flex items-center space-x-1">
-                          <Target className="h-3 w-3" />
-                          <span>{exercise.difficulty}</span>
+                        <div className="absolute bottom-4 right-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(exercise.difficulty)}`}>
+                            {exercise.difficulty}
+                          </span>
                         </div>
                       )}
-                      {exercise.duration && (
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{exercise.duration}</span>
-                        </div>
-                      )}
+                      
+                      {/* Gradient Overlay */}
+                      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/50 to-transparent"></div>
                     </div>
 
-                    <button
-                      onClick={() => startExercise(exercise)}
-                      className={`w-full flex items-center justify-center space-x-2 py-2 px-4 rounded-lg font-medium transition-colors ${
-                        isCompleted
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
-                          : 'bg-blue-500 hover:bg-blue-600 text-white'
-                      }`}
-                    >
-                      <PlayCircle className="h-4 w-4" />
-                      <span>{isCompleted ? 'Rifai esercizio' : 'Inizia esercizio'}</span>
-                    </button>
+                    <div className="p-6">
+                      
+                      {/* Claim */}
+                      {exercise.claim && (
+                        <div className="mb-3">
+                          <span className="text-blue-600 dark:text-blue-400 font-bold text-lg italic">
+                            "{exercise.claim}"
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* Title */}
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                        {exercise.title}
+                      </h3>
+                      
+                      {/* Description */}
+                      <p className="text-gray-600 dark:text-gray-300 text-sm mb-6 line-clamp-3">
+                        {exercise.description}
+                      </p>
+                      
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 mb-6 text-sm text-gray-500 dark:text-gray-400">
+                        {exercise.duration && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-4 w-4" />
+                            <span>{exercise.duration}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <Star className="h-4 w-4 fill-current text-yellow-400" />
+                          <span>4.8</span>
+                        </div>
+                      </div>
+                      
+                      {/* Action Button */}
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startExercise(exercise);
+                        }}
+                        className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-3 shadow-lg ${
+                          isCompleted
+                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white'
+                            : 'bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white'
+                        }`}
+                      >
+                        <PlayCircle className="h-6 w-6" />
+                        {isCompleted ? 'Rifai Esercizio' : 'Inizia Esercizio'}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -442,13 +588,19 @@ const UserDashboard = () => {
               {completedExercises.slice(0, 5).map((session) => (
                 <div
                   key={session.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+                  onClick={() => {
+                    if (session.exerciseId) {
+                      console.log('🔗 Navigating to exercise:', session.exerciseId);
+                      navigate(`/exercises/${session.exerciseId}/practice`);
+                    }
+                  }}
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer transition-colors"
                 >
                   <div className="flex items-center space-x-3">
                     <CheckCircle className="h-5 w-5 text-green-500" />
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {session.exerciseTitle}
+                        {session.exerciseTitle || 'Esercizio'}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Completato il {new Date(
@@ -457,7 +609,14 @@ const UserDashboard = () => {
                       </p>
                     </div>
                   </div>
-                  <Trophy className="h-4 w-4 text-yellow-500" />
+                  <div className="flex items-center space-x-2">
+                    {session.exerciseDifficulty && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${getDifficultyColor(session.exerciseDifficulty)}`}>
+                        {session.exerciseDifficulty}
+                      </span>
+                    )}
+                    <Trophy className="h-4 w-4 text-yellow-500" />
+                  </div>
                 </div>
               ))}
             </div>

@@ -45,6 +45,55 @@ const WelcomePage = () => {
             setVideoData(videoDoc.data());
           }
         }
+        // Se non c'è video configurato, prova diversi fallback
+        else {
+          console.log('📹 No video configured, trying fallbacks...');
+          
+          try {
+            // 1. Prova il video specifico menzionato
+            const specificVideoDoc = await getDoc(doc(db, 'videos', 'Rh2Qs8y5RNGPCs7HdFl6'));
+            if (specificVideoDoc.exists()) {
+              const videoData = specificVideoDoc.data();
+              console.log('✅ Found specific welcome video:', videoData);
+              setVideoData(videoData);
+              return;
+            }
+            
+            // 2. Cerca video con tag "welcome"
+            console.log('🔍 Searching for videos with "welcome" tag...');
+            const videosQuery = query(
+              collection(db, 'videos'),
+              where('tags', 'array-contains', 'welcome')
+            );
+            const videosSnapshot = await getDocs(videosQuery);
+            
+            if (!videosSnapshot.empty) {
+              const welcomeVideo = videosSnapshot.docs[0].data();
+              console.log('✅ Found welcome video by tag:', welcomeVideo);
+              setVideoData(welcomeVideo);
+              return;
+            }
+            
+            // 3. Cerca video con tag "introduzione" o "benvenuto"
+            console.log('🔍 Searching for videos with "introduzione" tag...');
+            const introQuery = query(
+              collection(db, 'videos'),
+              where('tags', 'array-contains-any', ['introduzione', 'benvenuto'])
+            );
+            const introSnapshot = await getDocs(introQuery);
+            
+            if (!introSnapshot.empty) {
+              const introVideo = introSnapshot.docs[0].data();
+              console.log('✅ Found intro video by tag:', introVideo);
+              setVideoData(introVideo);
+              return;
+            }
+            
+            console.log('❌ No welcome videos found in database');
+          } catch (error) {
+            console.error('❌ Error loading welcome video:', error);
+          }
+        }
       } else {
         console.log('⚠️ No welcome page found, using fallback');
         // Prova altri possibili document ID

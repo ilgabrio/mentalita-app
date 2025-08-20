@@ -8,22 +8,6 @@
     ],
     "rewrites": [
       {
-        "source": "!/assets/**",
-        "destination": "/index.html"
-      },
-      {
-        "source": "!/**/*.js",
-        "destination": "/index.html"
-      },
-      {
-        "source": "!/**/*.css",
-        "destination": "/index.html"
-      },
-      {
-        "source": "!/**/*.webmanifest",
-        "destination": "/index.html"
-      },
-      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -43,5 +27,9 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
   }
 }

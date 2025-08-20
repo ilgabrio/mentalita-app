@@ -14,33 +14,54 @@ const VideosPage = () => {
   useEffect(() => {
     const fetchVideos = async () => {
       try {
-        // Prova dalla collezione appVideos (collezione originale)
-        let q = query(
-          collection(db, 'appVideos'), 
-          where('isPublished', '==', true),
-          orderBy('order', 'asc')
-        );
+        console.log('🎥 Caricamento video...');
         
-        let querySnapshot = await getDocs(q);
+        // Prima prova senza filtri per vedere se ci sono video
         let videosData = [];
         
-        querySnapshot.forEach((doc) => {
-          videosData.push({ id: doc.id, ...doc.data() });
-        });
+        // Prova dalla collezione appVideos
+        try {
+          const appVideosSnapshot = await getDocs(collection(db, 'appVideos'));
+          console.log('📺 Video trovati in appVideos:', appVideosSnapshot.size);
+          
+          appVideosSnapshot.forEach((doc) => {
+            const data = doc.data();
+            // Aggiungi solo se isPublished è true o undefined
+            if (data.isPublished !== false) {
+              videosData.push({ id: doc.id, ...data });
+            }
+          });
+        } catch (error) {
+          console.log('Errore con appVideos:', error);
+        }
 
         // Se non ci sono risultati, prova dalla collezione videos
         if (videosData.length === 0) {
-          q = query(
-            collection(db, 'videos'), 
-            where('isPublished', '==', true),
-            orderBy('createdAt', 'desc')
-          );
-          
-          querySnapshot = await getDocs(q);
-          querySnapshot.forEach((doc) => {
-            videosData.push({ id: doc.id, ...doc.data() });
-          });
+          try {
+            const videosSnapshot = await getDocs(collection(db, 'videos'));
+            console.log('📺 Video trovati in videos:', videosSnapshot.size);
+            
+            videosSnapshot.forEach((doc) => {
+              const data = doc.data();
+              // Aggiungi solo se isPublished è true o undefined
+              if (data.isPublished !== false) {
+                videosData.push({ id: doc.id, ...data });
+              }
+            });
+          } catch (error) {
+            console.log('Errore con videos:', error);
+          }
         }
+        
+        console.log('✅ Video caricati:', videosData.length);
+        
+        // Ordina manualmente per order o createdAt
+        videosData.sort((a, b) => {
+          if (a.order !== undefined && b.order !== undefined) {
+            return a.order - b.order;
+          }
+          return 0;
+        });
 
         // Se ancora non ci sono dati, usa dati mock
         if (videosData.length === 0) {

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Debug - Mentalità</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 1rem;
+            background: #000;
+            color: #0f0;
+            margin: 0;
+            font-size: 12px;
+        }
+        .log {
+            border: 1px solid #333;
+            padding: 1rem;
+            margin: 1rem 0;
+            background: #111;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        button {
+            background: #0f0;
+            color: #000;
+            border: none;
+            padding: 0.5rem 1rem;
+            margin: 0.5rem;
+            cursor: pointer;
+        }
+        .error { color: #f00; }
+        .warning { color: #ff0; }
+        .info { color: #0ff; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Mobile Debug Console</h1>
+    
+    <div>
+        <button onclick="testNetwork()">Test Network</button>
+        <button onclick="testFirebase()">Test Firebase</button>
+        <button onclick="clearLogs()">Clear</button>
+        <button onclick="goToApp()">Go to App</button>
+    </div>
+    
+    <div class="log" id="console">
+        <div class="info">Debug console initialized...</div>
+    </div>
+    
+    <div class="log">
+        <div><strong>User Agent:</strong></div>
+        <div id="userAgent"></div>
+    </div>
+    
+    <div class="log">
+        <div><strong>Screen Info:</strong></div>
+        <div id="screenInfo"></div>
+    </div>
+    
+    <div class="log">
+        <div><strong>Storage:</strong></div>
+        <div id="storage"></div>
+    </div>
+
+    <script>
+        const consoleEl = document.getElementById('console');
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleEl.appendChild(div);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+            console.log(message);
+        }
+        
+        // Capture all console methods
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = (...args) => {
+            log(args.join(' '), 'info');
+            originalLog.apply(console, args);
+        };
+        
+        console.error = (...args) => {
+            log(`ERROR: ${args.join(' ')}`, 'error');
+            originalError.apply(console, args);
+        };
+        
+        console.warn = (...args) => {
+            log(`WARN: ${args.join(' ')}`, 'warning');
+            originalWarn.apply(console, args);
+        };
+        
+        // Capture uncaught errors
+        window.onerror = function(msg, url, line, col, error) {
+            log(`UNCAUGHT ERROR: ${msg} at ${url}:${line}:${col}`, 'error');
+            return false;
+        };
+        
+        window.addEventListener('unhandledrejection', function(event) {
+            log(`UNHANDLED PROMISE: ${event.reason}`, 'error');
+        });
+        
+        // Display system info
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        document.getElementById('screenInfo').innerHTML = `
+            Screen: ${screen.width}x${screen.height}<br>
+            Window: ${window.innerWidth}x${window.innerHeight}<br>
+            Device Pixel Ratio: ${window.devicePixelRatio}<br>
+            Touch Support: ${('ontouchstart' in window) ? 'Yes' : 'No'}
+        `;
+        
+        // Display storage info
+        let storageInfo = '';
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            storageInfo += `${key}: ${localStorage.getItem(key).substring(0, 50)}...<br>`;
+        }
+        document.getElementById('storage').innerHTML = storageInfo || 'No localStorage items';
+        
+        function testNetwork() {
+            log('Testing network connectivity...');
+            fetch('https://httpbin.org/json')
+                .then(response => response.json())
+                .then(data => log('✅ Network OK'))
+                .catch(error => log(`❌ Network failed: ${error.message}`, 'error'));
+        }
+        
+        function testFirebase() {
+            log('Testing Firebase connection...');
+            fetch('https://firestore.googleapis.com/v1/projects')
+                .then(response => log(`Firebase API response: ${response.status}`))
+                .catch(error => log(`❌ Firebase failed: ${error.message}`, 'error'));
+        }
+        
+        function clearLogs() {
+            consoleEl.innerHTML = '<div class="info">Logs cleared...</div>';
+        }
+        
+        function goToApp() {
+            window.location.href = '/';
+        }
+        
+        log('Mobile debug page loaded');
+        log(`Navigator online: ${navigator.onLine}`);
+        log(`Service Worker support: ${'serviceWorker' in navigator ? 'Yes' : 'No'}`);
+        
+        // Check for service workers
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                log(`Active service workers: ${registrations.length}`);
+                registrations.forEach((reg, index) => {
+                    log(`SW ${index}: ${reg.scope}`);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

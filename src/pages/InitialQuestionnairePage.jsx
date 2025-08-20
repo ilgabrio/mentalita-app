@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Trophy, 
-  Calendar, 
+  Clock, 
   Brain, 
   Target, 
   ChevronRight, 
@@ -11,18 +11,15 @@ import {
   Star,
   Activity,
   Users,
-  Zap
+  Zap,
+  Award,
+  Play
 } from 'lucide-react';
 import { db } from '../config/firebase';
 import { 
   doc, 
-  setDoc,
-  getDoc,
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy
+  updateDoc,
+  serverTimestamp
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
@@ -31,582 +28,341 @@ const InitialQuestionnairePage = () => {
   const { currentUser } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
-  const [customQuestions, setCustomQuestions] = useState([]);
+  const [answers, setAnswers] = useState({
+    sport: '',
+    level: '',
+    coachingExperience: '',
+    timeAvailable: '',
+    mentalGoals: []
+  });
 
-  // Default questions structure
-  const defaultQuestions = [
+  // Struttura delle 5 domande principali
+  const questions = [
     {
       id: 'sport',
       type: 'select',
-      question: 'Che sport pratichi?',
+      title: 'Che sport pratichi?',
       description: 'Seleziona il tuo sport principale',
+      icon: Trophy,
       options: [
-        'Calcio', 'Basket', 'Pallavolo', 'Tennis', 'Nuoto', 
-        'Atletica', 'Ciclismo', 'Rugby', 'Arti Marziali', 
-        'Golf', 'Sci', 'Danza', 'Ginnastica', 'Altro'
-      ],
-      required: true,
-      icon: Trophy
-    },
-    {
-      id: 'experience',
-      type: 'select',
-      question: 'Da quanti anni pratichi questo sport?',
-      description: 'Aiutaci a capire il tuo livello di esperienza',
-      options: [
-        'Meno di 1 anno',
-        '1-2 anni',
-        '3-5 anni',
-        '6-10 anni',
-        'Più di 10 anni'
-      ],
-      required: true,
-      icon: Calendar
+        'Calcio',
+        'Basket', 
+        'Tennis',
+        'Pallavolo',
+        'Nuoto',
+        'Atletica',
+        'Ciclismo',
+        'Arti Marziali',
+        'Crossfit/Fitness',
+        'Golf',
+        'Altri sport di squadra',
+        'Altri sport individuali',
+        'Multiple discipline',
+        'Altro'
+      ]
     },
     {
       id: 'level',
       type: 'select',
-      question: 'A che livello competi?',
-      description: 'Seleziona il livello più alto raggiunto',
+      title: 'Qual è il tuo livello attuale?',
+      description: 'Scegli il livello che meglio ti rappresenta',
+      icon: Star,
       options: [
-        'Amatoriale',
-        'Locale/Provinciale',
-        'Regionale',
-        'Nazionale',
-        'Internazionale',
-        'Professionista'
-      ],
-      required: true,
-      icon: Star
+        'Principiante/Amatoriale',
+        'Intermedio/Club locale',
+        'Avanzato/Competitivo regionale',
+        'Semi-professionale',
+        'Professionale',
+        'Ex-atleta/Allenatore'
+      ]
     },
     {
-      id: 'coaching_knowledge',
-      type: 'radio',
-      question: 'Conosci già il mental coaching?',
-      description: 'Hai esperienza con tecniche di allenamento mentale?',
+      id: 'coachingExperience',
+      type: 'select',
+      title: 'Hai mai fatto coaching mentale/psicologico sportivo?',
+      description: 'La tua esperienza con il mental coaching',
+      icon: Brain,
       options: [
-        { value: 'none', label: 'No, è la prima volta' },
-        { value: 'basic', label: 'Ho sentito parlarne ma non l\'ho mai provato' },
-        { value: 'some', label: 'Ho provato qualche tecnica base' },
-        { value: 'experienced', label: 'Ho già lavorato con un mental coach' }
-      ],
-      required: true,
-      icon: Brain
+        'Mai fatto',
+        'Qualche sessione occasionale',
+        'Percorso breve (1-3 mesi)',
+        'Percorso lungo (6+ mesi)',
+        'Lavoro regolarmente con un mental coach',
+        'Sono io stesso un coach/preparatore'
+      ]
     },
     {
-      id: 'goals',
-      type: 'checkbox',
-      question: 'Su cosa vuoi lavorare principalmente?',
-      description: 'Puoi selezionare più opzioni',
+      id: 'timeAvailable',
+      type: 'select',
+      title: 'Quanto tempo puoi dedicare settimanalmente?',
+      description: 'Tempo per l\'allenamento mentale e gli esercizi',
+      icon: Clock,
+      options: [
+        '15-30 minuti',
+        '30-60 minuti',
+        '1-2 ore',
+        '2-4 ore',
+        'Più di 4 ore',
+        'Dipende dal periodo'
+      ]
+    },
+    {
+      id: 'mentalGoals',
+      type: 'multiselect',
+      title: 'Su cosa vuoi lavorare principalmente?',
+      description: 'Seleziona tutti gli obiettivi che ti interessano',
+      icon: Target,
       options: [
         'Gestione dell\'ansia pre-gara',
-        'Concentrazione e focus',
-        'Motivazione e costanza',
+        'Concentrazione durante l\'attività',
+        'Motivazione e costanza nell\'allenamento',
+        'Recupero da infortuni/sconfitte',
+        'Autostima e fiducia in se stessi',
         'Gestione della pressione',
-        'Resilienza dopo sconfitte',
-        'Visualizzazione del successo',
-        'Comunicazione con la squadra',
-        'Leadership',
-        'Gestione delle emozioni',
-        'Autostima e fiducia'
-      ],
-      required: true,
-      minSelect: 1,
-      maxSelect: 5,
-      icon: Target
-    },
-    {
-      id: 'self_evaluation',
-      type: 'rating',
-      question: 'Come ti valuti in questi aspetti?',
-      description: 'Valuta da 1 (molto scarso) a 5 (eccellente)',
-      items: [
-        { id: 'concentration', label: 'Concentrazione durante la gara' },
-        { id: 'pressure', label: 'Gestione della pressione' },
-        { id: 'motivation', label: 'Motivazione costante' },
-        { id: 'confidence', label: 'Fiducia in te stesso' },
-        { id: 'recovery', label: 'Recupero dopo errori/sconfitte' },
-        { id: 'teamwork', label: 'Lavoro di squadra' }
-      ],
-      required: true,
-      icon: Activity
-    },
-    {
-      id: 'training_frequency',
-      type: 'select',
-      question: 'Quanto spesso ti alleni fisicamente?',
-      description: 'Includi allenamenti e partite',
-      options: [
-        '1-2 volte a settimana',
-        '3-4 volte a settimana',
-        '5-6 volte a settimana',
-        'Tutti i giorni',
-        'Più volte al giorno'
-      ],
-      required: true,
-      icon: Zap
-    },
-    {
-      id: 'time_availability',
-      type: 'select',
-      question: 'Quanto tempo puoi dedicare al mental training?',
-      description: 'Tempo giornaliero per esercizi mentali',
-      options: [
-        '5-10 minuti',
-        '10-15 minuti',
-        '15-30 minuti',
-        '30-45 minuti',
-        'Più di 45 minuti'
-      ],
-      required: true,
-      icon: Calendar
-    },
-    {
-      id: 'biggest_challenge',
-      type: 'textarea',
-      question: 'Qual è la tua sfida più grande nello sport?',
-      description: 'Descrivi brevemente la difficoltà principale che affronti',
-      placeholder: 'Es: Tendo a perdere concentrazione nei momenti decisivi...',
-      maxLength: 500,
-      required: true,
-      icon: Target
-    },
-    {
-      id: 'expectations',
-      type: 'textarea',
-      question: 'Cosa ti aspetti da questo percorso?',
-      description: 'Quali risultati speri di ottenere?',
-      placeholder: 'Es: Vorrei migliorare la mia capacità di gestire la pressione...',
-      maxLength: 500,
-      required: false,
-      icon: Star
+        'Visualizzazione e preparazione mentale',
+        'Leadership di squadra',
+        'Controllo delle emozioni',
+        'Definizione e raggiungimento obiettivi',
+        'Superamento di blocchi mentali',
+        'Miglioramento del focus'
+      ]
     }
   ];
 
-  useEffect(() => {
-    loadQuestions();
-  }, []);
+  const currentQuestion = questions[currentStep];
+  const totalSteps = questions.length;
+  const progress = ((currentStep + 1) / totalSteps) * 100;
 
-  const loadQuestions = async () => {
-    try {
-      // Try to load custom questions from Firebase
-      // Simplified query to avoid index requirement
-      const questionsQuery = query(
-        collection(db, 'questionnaireQuestions'),
-        where('type', '==', 'initial')
-      );
+  const handleAnswer = (value) => {
+    if (currentQuestion.type === 'multiselect') {
+      const currentGoals = answers.mentalGoals || [];
+      const newGoals = currentGoals.includes(value)
+        ? currentGoals.filter(goal => goal !== value)
+        : [...currentGoals, value];
       
-      const snapshot = await getDocs(questionsQuery);
-      const customQs = [];
-      
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        // Filter active questions in code instead of query
-        if (data.isActive !== false) {
-          customQs.push({
-            id: doc.id,
-            ...data
-          });
-        }
-      });
-
-      // Sort by order in code
-      customQs.sort((a, b) => (a.order || 0) - (b.order || 0));
-
-      if (customQs.length > 0) {
-        setCustomQuestions(customQs);
-        setQuestions(customQs);
-      } else {
-        setQuestions(defaultQuestions);
-      }
-    } catch (error) {
-      console.error('Error loading questions:', error);
-      setQuestions(defaultQuestions);
+      setAnswers(prev => ({
+        ...prev,
+        [currentQuestion.id]: newGoals
+      }));
+    } else {
+      setAnswers(prev => ({
+        ...prev,
+        [currentQuestion.id]: value
+      }));
     }
   };
 
-  const handleAnswer = (questionId, value) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: value
-    }));
-  };
-
-  const validateCurrentStep = () => {
-    const currentQuestion = questions[currentStep];
-    if (!currentQuestion) return true;
-
+  const canProceed = () => {
     const answer = answers[currentQuestion.id];
-    
-    if (currentQuestion.required && !answer) {
-      alert('Per favore rispondi alla domanda prima di continuare');
-      return false;
+    if (currentQuestion.type === 'multiselect') {
+      return answer && answer.length > 0;
     }
-
-    if (currentQuestion.type === 'checkbox') {
-      const selectedCount = answer ? answer.length : 0;
-      if (currentQuestion.minSelect && selectedCount < currentQuestion.minSelect) {
-        alert(`Seleziona almeno ${currentQuestion.minSelect} opzioni`);
-        return false;
-      }
-      if (currentQuestion.maxSelect && selectedCount > currentQuestion.maxSelect) {
-        alert(`Puoi selezionare massimo ${currentQuestion.maxSelect} opzioni`);
-        return false;
-      }
-    }
-
-    if (currentQuestion.type === 'rating' && currentQuestion.required) {
-      const items = currentQuestion.items || [];
-      const hasAllRatings = items.every(item => 
-        answer && answer[item.id] && answer[item.id] > 0
-      );
-      if (!hasAllRatings) {
-        alert('Per favore valuta tutti gli aspetti');
-        return false;
-      }
-    }
-
-    return true;
+    return answer && answer.trim() !== '';
   };
 
-  const nextStep = () => {
-    if (!validateCurrentStep()) return;
-    
-    if (currentStep < questions.length - 1) {
+  const handleNext = () => {
+    if (currentStep < totalSteps - 1) {
       setCurrentStep(currentStep + 1);
     } else {
-      submitQuestionnaire();
+      handleSubmit();
     }
   };
 
-  const prevStep = () => {
+  const handlePrevious = () => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  const submitQuestionnaire = async () => {
-    setLoading(true);
+  const handleSubmit = async () => {
+    if (!currentUser) return;
+
     try {
-      console.log('🔄 QUESTIONNAIRE SUBMIT - Starting...', {
-        currentUser: currentUser?.uid,
-        answers: answers
+      setLoading(true);
+
+      // Salva il questionario nel profilo utente
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        initialQuestionnaire: {
+          ...answers,
+          completedAt: serverTimestamp()
+        },
+        initialQuestionnaireCompleted: true,
+        updatedAt: serverTimestamp()
       });
 
-      // Save questionnaire responses
-      const questionnaireData = {
-        type: 'initial',
-        answers,
-        completedAt: new Date(),
-        userId: currentUser?.uid,
-        userEmail: currentUser?.email,
-        // Add analyzed data for easy querying
-        sport: answers.sport,
-        level: answers.level,
-        experience: answers.experience,
-        goals: answers.goals || [],
-        selfEvaluation: answers.self_evaluation || {}
-      };
-
-      console.log('📝 QUESTIONNAIRE DATA:', questionnaireData);
-
-      // Save to user's questionnaires subcollection
-      if (currentUser) {
-        console.log('💾 Saving to user subcollection...');
-        await setDoc(
-          doc(db, 'users', currentUser.uid, 'questionnaires', 'initial'),
-          questionnaireData
-        );
-        console.log('✅ User subcollection saved');
-
-        // Also save to global questionnaires collection for admin
-        console.log('💾 Saving to global collection...');
-        await setDoc(
-          doc(db, 'questionnaires', `${currentUser.uid}_initial`),
-          {
-            ...questionnaireData,
-            userName: currentUser.displayName || currentUser.email || 'Atleta'
-          }
-        );
-        console.log('✅ Global collection saved');
-
-        // Update user profile with questionnaire completion
-        console.log('💾 Updating user profile...');
-        await setDoc(
-          doc(db, 'users', currentUser.uid),
-          {
-            initialQuestionnaireCompleted: true,
-            initialQuestionnaireDate: new Date(),
-            sport: answers.sport,
-            level: answers.level
-          },
-          { merge: true }
-        );
-        console.log('✅ User profile updated');
-      }
-
-      // Mark questionnaire as completed in localStorage
+      // Salva nel localStorage per il controllo lato client
       localStorage.setItem('initialQuestionnaireCompleted', 'true');
-      console.log('✅ localStorage updated');
+
+      console.log('✅ Questionario iniziale completato e salvato');
       
-      console.log('🎉 QUESTIONNAIRE SUBMIT - Success! Navigating to welcome...');
-      // Navigate to welcome page
-      navigate('/welcome');
+      // Redirect al primo passo dell'onboarding
+      navigate('/onboarding');
+      
     } catch (error) {
-      console.error('❌ QUESTIONNAIRE SUBMIT ERROR:', error);
-      console.error('Error details:', {
-        code: error.code,
-        message: error.message,
-        stack: error.stack
-      });
-      alert(`Errore nel salvataggio: ${error.message}`);
+      console.error('Errore nel salvare il questionario:', error);
+      // Continua comunque per non bloccare l'utente
+      localStorage.setItem('initialQuestionnaireCompleted', 'true');
+      navigate('/onboarding');
     } finally {
       setLoading(false);
     }
   };
 
-  if (questions.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-      </div>
-    );
-  }
-
-  const currentQuestion = questions[currentStep];
-  const progress = ((currentStep + 1) / questions.length) * 100;
-  const Icon = currentQuestion.icon || Brain;
+  const IconComponent = currentQuestion.icon;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      {/* Progress Bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-gray-200 dark:bg-gray-700 z-50">
-        <div 
-          className="h-full bg-indigo-600 transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      <div className="container mx-auto px-4 py-8 pt-12">
-        <div className="max-w-3xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              Questionario Iniziale
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300">
-              Domanda {currentStep + 1} di {questions.length}
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-indigo-900 flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-2xl">
+        {/* Progress Bar */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between text-white/80 text-sm mb-2">
+            <span>Domanda {currentStep + 1} di {totalSteps}</span>
+            <span>{Math.round(progress)}% completato</span>
           </div>
+          <div className="w-full bg-white/20 rounded-full h-2">
+            <div 
+              className="bg-gradient-to-r from-blue-400 to-purple-400 h-2 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
 
-          {/* Question Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-            {/* Question Icon */}
-            <div className="flex justify-center mb-6">
-              <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center">
-                <Icon className="h-8 w-8 text-indigo-600 dark:text-indigo-400" />
-              </div>
+        {/* Question Card */}
+        <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl p-8 animate-fade-in">
+          {/* Question Header */}
+          <div className="flex items-center space-x-4 mb-6">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-xl">
+              <IconComponent className="h-6 w-6 text-white" />
             </div>
-
-            {/* Question */}
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3 text-center">
-              {currentQuestion.question}
-            </h2>
-            
-            {currentQuestion.description && (
-              <p className="text-gray-600 dark:text-gray-400 mb-8 text-center">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                {currentQuestion.title}
+              </h2>
+              <p className="text-gray-600">
                 {currentQuestion.description}
               </p>
-            )}
-
-            {/* Answer Options */}
-            <div className="space-y-3">
-              {/* Select Type */}
-              {currentQuestion.type === 'select' && (
-                <select
-                  value={answers[currentQuestion.id] || ''}
-                  onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-lg"
-                >
-                  <option value="">Seleziona...</option>
-                  {currentQuestion.options.map(option => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              {/* Radio Type */}
-              {currentQuestion.type === 'radio' && (
-                <div className="space-y-3">
-                  {currentQuestion.options.map(option => {
-                    const value = typeof option === 'string' ? option : option.value;
-                    const label = typeof option === 'string' ? option : option.label;
-                    return (
-                      <label
-                        key={value}
-                        className="flex items-center p-4 border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <input
-                          type="radio"
-                          name={currentQuestion.id}
-                          value={value}
-                          checked={answers[currentQuestion.id] === value}
-                          onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}
-                          className="w-5 h-5 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="ml-3 text-gray-900 dark:text-white">{label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Checkbox Type */}
-              {currentQuestion.type === 'checkbox' && (
-                <div className="space-y-3">
-                  {currentQuestion.options.map(option => {
-                    const isChecked = (answers[currentQuestion.id] || []).includes(option);
-                    return (
-                      <label
-                        key={option}
-                        className="flex items-center p-4 border border-gray-200 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => {
-                            const currentAnswers = answers[currentQuestion.id] || [];
-                            let newAnswers;
-                            if (e.target.checked) {
-                              newAnswers = [...currentAnswers, option];
-                            } else {
-                              newAnswers = currentAnswers.filter(a => a !== option);
-                            }
-                            handleAnswer(currentQuestion.id, newAnswers);
-                          }}
-                          className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
-                        />
-                        <span className="ml-3 text-gray-900 dark:text-white">{option}</span>
-                      </label>
-                    );
-                  })}
-                  {currentQuestion.maxSelect && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                      Seleziona massimo {currentQuestion.maxSelect} opzioni
-                      {answers[currentQuestion.id] && ` (${answers[currentQuestion.id].length} selezionate)`}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Rating Type */}
-              {currentQuestion.type === 'rating' && (
-                <div className="space-y-4">
-                  {currentQuestion.items.map(item => {
-                    const rating = answers[currentQuestion.id]?.[item.id] || 0;
-                    return (
-                      <div key={item.id} className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-700 dark:text-gray-300">{item.label}</span>
-                          <span className="text-sm text-gray-500 dark:text-gray-400">
-                            {rating > 0 ? rating : 'Non valutato'}
-                          </span>
-                        </div>
-                        <div className="flex space-x-2">
-                          {[1, 2, 3, 4, 5].map(value => (
-                            <button
-                              key={value}
-                              onClick={() => {
-                                const currentRatings = answers[currentQuestion.id] || {};
-                                handleAnswer(currentQuestion.id, {
-                                  ...currentRatings,
-                                  [item.id]: value
-                                });
-                              }}
-                              className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
-                                rating === value
-                                  ? 'bg-indigo-600 text-white'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
-                              }`}
-                            >
-                              {value}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    1 = Molto scarso | 5 = Eccellente
-                  </div>
-                </div>
-              )}
-
-              {/* Textarea Type */}
-              {currentQuestion.type === 'textarea' && (
-                <div>
-                  <textarea
-                    value={answers[currentQuestion.id] || ''}
-                    onChange={(e) => handleAnswer(currentQuestion.id, e.target.value)}
-                    placeholder={currentQuestion.placeholder}
-                    maxLength={currentQuestion.maxLength}
-                    rows={5}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                  />
-                  {currentQuestion.maxLength && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {(answers[currentQuestion.id] || '').length} / {currentQuestion.maxLength} caratteri
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Navigation */}
-            <div className="flex justify-between items-center mt-8">
-              <button
-                onClick={prevStep}
-                disabled={currentStep === 0}
-                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-colors ${
-                  currentStep === 0
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                <ChevronLeft className="h-5 w-5" />
-                <span>Indietro</span>
-              </button>
-
-              <button
-                onClick={nextStep}
-                disabled={loading}
-                className="flex items-center space-x-2 px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
-              >
-                <span>
-                  {currentStep === questions.length - 1 ? 'Completa' : 'Avanti'}
-                </span>
-                {currentStep === questions.length - 1 ? (
-                  <Check className="h-5 w-5" />
-                ) : (
-                  <ChevronRight className="h-5 w-5" />
-                )}
-              </button>
             </div>
           </div>
 
-          {/* Skip for now */}
-          <div className="text-center mt-6">
+          {/* Question Options */}
+          <div className="space-y-3 mb-8">
+            {currentQuestion.type === 'multiselect' ? (
+              // Multiple selection for mental goals
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {currentQuestion.options.map((option, index) => {
+                  const isSelected = answers.mentalGoals?.includes(option);
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handleAnswer(option)}
+                      className={`p-4 text-left rounded-xl border-2 transition-all duration-200 ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50 text-blue-900'
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">{option}</span>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-blue-600" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              // Single selection for other questions
+              <div className="space-y-3">
+                {currentQuestion.options.map((option, index) => {
+                  const isSelected = answers[currentQuestion.id] === option;
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handleAnswer(option)}
+                      className={`w-full p-4 text-left rounded-xl border-2 transition-all duration-200 ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50 text-blue-900'
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{option}</span>
+                        {isSelected && (
+                          <Check className="h-5 w-5 text-blue-600" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Selected Goals Summary (for multiselect) */}
+          {currentQuestion.type === 'multiselect' && answers.mentalGoals?.length > 0 && (
+            <div className="mb-6 p-4 bg-blue-50 rounded-xl">
+              <p className="text-sm font-medium text-blue-900 mb-2">
+                Obiettivi selezionati ({answers.mentalGoals.length}):
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {answers.mentalGoals.map((goal, index) => (
+                  <span 
+                    key={index}
+                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded-full"
+                  >
+                    {goal}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="flex items-center justify-between">
             <button
-              onClick={() => navigate('/welcome')}
-              className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 text-sm"
+              onClick={handlePrevious}
+              disabled={currentStep === 0}
+              className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-medium transition-all ${
+                currentStep === 0
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+              }`}
             >
-              Compila più tardi
+              <ChevronLeft className="h-5 w-5" />
+              <span>Indietro</span>
+            </button>
+
+            <button
+              onClick={handleNext}
+              disabled={!canProceed() || loading}
+              className={`flex items-center space-x-2 px-8 py-3 rounded-xl font-medium transition-all ${
+                canProceed() && !loading
+                  ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {loading ? (
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              ) : (
+                <>
+                  <span>
+                    {currentStep === totalSteps - 1 ? 'Completa' : 'Avanti'}
+                  </span>
+                  {currentStep === totalSteps - 1 ? (
+                    <Check className="h-5 w-5" />
+                  ) : (
+                    <ChevronRight className="h-5 w-5" />
+                  )}
+                </>
+              )}
             </button>
           </div>
+        </div>
+
+        {/* Footer Info */}
+        <div className="text-center mt-6 text-white/60 text-sm">
+          <p>Le tue risposte ci aiuteranno a personalizzare la tua esperienza</p>
         </div>
       </div>
     </div>

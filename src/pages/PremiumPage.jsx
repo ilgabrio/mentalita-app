@@ -6,696 +6,548 @@ import {
   query, 
   getDocs, 
   addDoc,
-  where,
-  orderBy
+  where
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { 
   Crown, 
-  Check, 
-  X,
-  Star, 
-  Zap, 
-  Shield,
-  TrendingUp,
-  Users,
-  Award,
-  Lock,
-  Unlock,
+  Target,
+  Brain,
+  Trophy,
+  Sparkles,
   ChevronRight,
+  ChevronLeft,
+  CheckCircle,
+  Send,
+  Clock,
+  AlertCircle,
+  User,
   Calendar,
-  CreditCard,
-  Info
+  Timer,
+  Award,
+  Heart,
+  Shield,
+  TrendingUp
 } from 'lucide-react';
 
 const PremiumPage = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [plans, setPlans] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState(null);
-  const [billingPeriod, setBillingPeriod] = useState('monthly');
-  const [userSubscription, setUserSubscription] = useState(null);
-  const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
-  const [questionnaireData, setQuestionnaireData] = useState({});
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [hasActiveRequest, setHasActiveRequest] = useState(false);
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [formData, setFormData] = useState({
+    sport: '',
+    level: '',
+    experience: '',
+    goals: '',
+    challenges: '',
+    commitment: '',
+    timeAvailable: '',
+    previousMentalTraining: '',
+    expectations: '',
+    whyPremium: ''
+  });
 
-  // Piani predefiniti se non ci sono nel database
-  const defaultPlans = [
+  const questions = [
     {
-      id: 'basic',
-      name: 'Basic',
-      icon: '⭐',
-      monthlyPrice: 0,
-      yearlyPrice: 0,
-      features: [
-        'Accesso agli esercizi base',
-        '5 video al mese',
-        'Articoli gratuiti',
-        'Badge base',
-        'Supporto community'
-      ],
-      limitations: [
-        'Esercizi avanzati limitati',
-        'No contenuti esclusivi',
-        'No coaching personalizzato'
-      ],
-      color: 'gray',
-      popular: false
+      id: 'sport',
+      title: 'Il Tuo Sport',
+      question: 'Qual è il tuo sport principale?',
+      type: 'text',
+      placeholder: 'es. Calcio, Tennis, Nuoto, Pallavolo...',
+      icon: <Trophy className="h-6 w-6" />,
+      required: true
     },
     {
-      id: 'pro',
-      name: 'Pro',
-      icon: '🚀',
-      monthlyPrice: 9.99,
-      yearlyPrice: 99.99,
-      features: [
-        'Tutti gli esercizi sbloccati',
-        'Video illimitati HD',
-        'Articoli premium',
-        'Audio meditazioni guidate',
-        'Badge esclusivi',
-        'Statistiche avanzate',
-        'Priorità nel supporto',
-        'Newsletter settimanale'
+      id: 'level',
+      title: 'Livello Attuale',
+      question: 'A che livello pratichi il tuo sport?',
+      type: 'select',
+      options: [
+        'Amatoriale - Mi diverto e basta',
+        'Semi-professionista - Gareggio regolarmente',
+        'Professionista - È il mio lavoro',
+        'Giovanile/Academy - Sto crescendo',
+        'Master/Veterano - Esperienza e passione'
       ],
-      limitations: [
-        'No coaching 1-on-1',
-        'No programmi personalizzati'
-      ],
-      color: 'blue',
-      popular: true,
-      badge: 'Più Popolare'
+      icon: <Award className="h-6 w-6" />,
+      required: true
     },
     {
-      id: 'elite',
-      name: 'Elite',
-      icon: '👑',
-      monthlyPrice: 24.99,
-      yearlyPrice: 249.99,
-      features: [
-        'Tutto del piano Pro',
-        'Coaching mensile 1-on-1',
-        'Programmi personalizzati',
-        'Accesso anticipato ai contenuti',
-        'Webinar esclusivi',
-        'Chat diretta con esperti',
-        'Certificato di completamento',
-        'Analisi performance AI',
-        'Contenuti scaricabili offline'
+      id: 'experience',
+      title: 'Esperienza',
+      question: 'Da quanto tempo pratichi questo sport?',
+      type: 'select',
+      options: [
+        'Meno di 1 anno',
+        '1-3 anni',
+        '3-5 anni',
+        '5-10 anni',
+        'Più di 10 anni'
       ],
-      limitations: [],
-      color: 'purple',
-      popular: false,
-      badge: 'Massimo Valore'
+      icon: <Timer className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'goals',
+      title: 'I Tuoi Obiettivi',
+      question: 'Quali sono i tuoi obiettivi principali per i prossimi 6 mesi?',
+      type: 'textarea',
+      placeholder: 'Descrivi cosa vorresti raggiungere o migliorare...',
+      icon: <Target className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'challenges',
+      title: 'Le Tue Sfide',
+      question: 'Quali sfide mentali stai affrontando attualmente?',
+      type: 'textarea',
+      placeholder: 'es. Ansia pre-gara, difficoltà di concentrazione, gestione della pressione, motivazione...',
+      icon: <Brain className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'commitment',
+      title: 'Il Tuo Impegno',
+      question: 'Quanto sei determinato/a a migliorare il tuo aspetto mentale?',
+      type: 'select',
+      options: [
+        'Curioso - Voglio capire se fa per me',
+        'Interessato - Pronto a provarci',
+        'Determinato - È una priorità per me',
+        'Totalmente impegnato - Farò di tutto per migliorare'
+      ],
+      icon: <Heart className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'timeAvailable',
+      title: 'Tempo Disponibile',
+      question: 'Quanto tempo puoi dedicare al training mentale ogni giorno?',
+      type: 'select',
+      options: [
+        '10-15 minuti',
+        '15-30 minuti',
+        '30-45 minuti',
+        '45-60 minuti',
+        'Più di 1 ora'
+      ],
+      icon: <Clock className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'previousMentalTraining',
+      title: 'Esperienza Precedente',
+      question: 'Hai mai fatto mental training o lavorato con uno psicologo dello sport?',
+      type: 'textarea',
+      placeholder: 'Racconta brevemente la tua esperienza (o scrivi "No" se è la prima volta)...',
+      icon: <Shield className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'expectations',
+      title: 'Le Tue Aspettative',
+      question: 'Cosa ti aspetti dal percorso Premium di Mentalità Vincente?',
+      type: 'textarea',
+      placeholder: 'Cosa speri di ottenere da questo percorso...',
+      icon: <Sparkles className="h-6 w-6" />,
+      required: true
+    },
+    {
+      id: 'whyPremium',
+      title: 'Perché Premium',
+      question: 'Perché pensi che il percorso Premium sia giusto per te?',
+      type: 'textarea',
+      placeholder: 'Cosa ti ha convinto a fare questo passo...',
+      icon: <Crown className="h-6 w-6" />,
+      required: true
     }
   ];
 
   useEffect(() => {
-    fetchPlans();
-    if (currentUser) {
-      checkUserSubscription();
-    }
+    checkExistingRequestsAndSubscriptions();
   }, [currentUser]);
 
-  const fetchPlans = async () => {
-    try {
-      setLoading(true);
-      
-      // Prima prova con l'ordinamento per ordine, poi per prezzo
-      let plansQuery;
-      try {
-        plansQuery = query(
-          collection(db, 'premiumPlans'),
-          where('isActive', '==', true),
-          orderBy('order', 'asc')
-        );
-      } catch (orderError) {
-        // Fallback senza ordinamento se l'indice non esiste
-        plansQuery = query(
-          collection(db, 'premiumPlans'),
-          where('isActive', '==', true)
-        );
-      }
-      
-      const snapshot = await getDocs(plansQuery);
-      
-      if (snapshot.empty) {
-        // Usa i piani predefiniti se non ci sono nel database
-        setPlans(defaultPlans);
-      } else {
-        const plansData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        
-        // Ordina manualmente se non c'era ordinamento nella query
-        const sortedPlans = plansData.sort((a, b) => {
-          if (a.order !== undefined && b.order !== undefined) {
-            return a.order - b.order;
-          }
-          return (a.monthlyPrice || 0) - (b.monthlyPrice || 0);
-        });
-        
-        setPlans(sortedPlans);
-      }
-    } catch (error) {
-      console.error('Error loading plans:', error);
-      // Fallback finale senza filtri
-      try {
-        const fallbackQuery = query(collection(db, 'premiumPlans'));
-        const snapshot = await getDocs(fallbackQuery);
-        if (!snapshot.empty) {
-          const plansData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          }));
-          const activePlans = plansData.filter(plan => plan.isActive !== false);
-          setPlans(activePlans.length > 0 ? activePlans : defaultPlans);
-        } else {
-          setPlans(defaultPlans);
-        }
-      } catch (fallbackError) {
-        console.error('Fallback query failed:', fallbackError);
-        setPlans(defaultPlans);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const checkExistingRequestsAndSubscriptions = async () => {
+    if (!currentUser) return;
 
-  const checkUserSubscription = async () => {
     try {
-      const subQuery = query(
+      // Check for pending requests
+      const requestsQuery = query(
+        collection(db, 'premiumRequests'),
+        where('userId', '==', currentUser.uid),
+        where('status', '==', 'pending')
+      );
+      const requestsSnapshot = await getDocs(requestsQuery);
+      setHasActiveRequest(!requestsSnapshot.empty);
+
+      // Check for active subscriptions
+      const subsQuery = query(
         collection(db, 'subscriptions'),
         where('userId', '==', currentUser.uid),
         where('status', '==', 'active')
       );
-      const snapshot = await getDocs(subQuery);
-      
-      if (!snapshot.empty) {
-        setUserSubscription(snapshot.docs[0].data());
-      }
+      const subsSnapshot = await getDocs(subsQuery);
+      setHasActiveSubscription(!subsSnapshot.empty);
     } catch (error) {
-      console.error('Error checking subscription:', error);
+      console.error('Error checking existing requests:', error);
     }
   };
 
-  const premiumQuestions = [
-    {
-      id: 'sport',
-      question: 'Qual è il tuo sport principale?',
-      type: 'text',
-      placeholder: 'es. Calcio, Tennis, Nuoto...'
-    },
-    {
-      id: 'level',
-      question: 'A che livello pratichi il tuo sport?',
-      type: 'select',
-      options: ['Amatoriale', 'Semi-professionista', 'Professionista', 'Giovanile/Academy']
-    },
-    {
-      id: 'goals',
-      question: 'Quali sono i tuoi obiettivi principali?',
-      type: 'textarea',
-      placeholder: 'Descrivi cosa vorresti migliorare...'
-    },
-    {
-      id: 'challenges',
-      question: 'Quali sfide mentali stai affrontando?',
-      type: 'textarea',
-      placeholder: 'es. Ansia pre-gara, concentrazione, motivazione...'
-    },
-    {
-      id: 'commitment',
-      question: 'Quanto tempo puoi dedicare al training mentale ogni giorno?',
-      type: 'select',
-      options: ['10-15 minuti', '15-30 minuti', '30-60 minuti', 'Più di 60 minuti']
-    }
-  ];
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
-  const handleSelectPlan = async (plan) => {
+  const handleNext = () => {
+    const currentQuestion = questions[currentStep];
+    if (currentQuestion.required && !formData[currentQuestion.id]) {
+      alert('Per favore, rispondi alla domanda prima di continuare');
+      return;
+    }
+    setCurrentStep(prev => Math.min(prev + 1, questions.length - 1));
+  };
+
+  const handlePrevious = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 0));
+  };
+
+  const handleSubmit = async () => {
     if (!currentUser) {
       navigate('/login');
       return;
     }
 
-    if (plan.monthlyPrice === 0 || plan.yearlyPrice === 0) {
-      // Piano gratuito
-      alert('Stai già utilizzando il piano Basic gratuito!');
+    // Validate all required fields
+    const missingFields = questions
+      .filter(q => q.required && !formData[q.id])
+      .map(q => q.title);
+    
+    if (missingFields.length > 0) {
+      alert(`Per favore completa tutti i campi richiesti: ${missingFields.join(', ')}`);
       return;
     }
 
-    setSelectedPlan(plan);
-    
-    // Per il piano Gold, mostra direttamente il messaggio del colloquio
-    if (plan.name?.toLowerCase().includes('gold') || plan.name?.toLowerCase().includes('elite')) {
-      try {
-        await addDoc(collection(db, 'premiumRequests'), {
-          userId: currentUser.uid,
-          userEmail: currentUser.email,
-          planId: plan.id,
-          planName: plan.name,
-          billingPeriod: billingPeriod,
-          price: billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice,
-          status: 'pending_interview',
-          requiresInterview: true,
-          createdAt: new Date()
-        });
-
-        alert(`🎯 Piano ${plan.name} - Richiesta Inviata!\n\nIl piano Gold prevede un colloquio personalizzato per creare il tuo percorso su misura.\n\nVerrai contattato entro 24 ore per fissare il colloquio conoscitivo.\n\nDurante il colloquio definiremo insieme:\n• I tuoi obiettivi specifici\n• Il percorso personalizzato\n• Le sessioni di coaching 1-on-1`);
-      } catch (error) {
-        console.error('Error creating gold request:', error);
-        alert('Errore nella richiesta. Riprova più tardi.');
-      }
-    } else {
-      // Per il piano Premium, mostra il questionario
-      setShowQuestionnaireModal(true);
-      setCurrentQuestion(0);
-      setQuestionnaireData({});
-    }
-  };
-
-  const handleQuestionnaireSubmit = async () => {
     try {
+      setLoading(true);
+
       await addDoc(collection(db, 'premiumRequests'), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
-        planId: selectedPlan.id,
-        planName: selectedPlan.name,
-        billingPeriod: billingPeriod,
-        price: billingPeriod === 'monthly' ? selectedPlan.monthlyPrice : selectedPlan.yearlyPrice,
-        status: 'pending_approval',
-        questionnaireResponses: questionnaireData,
-        createdAt: new Date()
+        status: 'pending',
+        requestType: 'premium_application',
+        responses: formData,
+        createdAt: new Date(),
+        metadata: {
+          completedQuestions: questions.length,
+          submittedFrom: 'premium_page'
+        }
       });
 
-      setShowQuestionnaireModal(false);
-      alert(`✅ Richiesta Piano ${selectedPlan.name} Completata!\n\nLe tue risposte sono state inviate per l'approvazione.\n\nRiceverai una risposta entro 24 ore con:\n• Conferma dell'attivazione\n• Istruzioni per il pagamento\n• Accesso ai contenuti Premium`);
+      alert(`✨ Richiesta Premium Inviata con Successo!
+
+La tua candidatura è stata ricevuta e sarà valutata attentamente.
+
+Cosa succede ora:
+1. ⏰ Riceverai una risposta entro 24-48 ore
+2. 📞 Se approvato, ti contatterò per un breve colloquio conoscitivo
+3. 🎯 Definiremo insieme il tuo percorso personalizzato
+4. 💳 Solo dopo l'approvazione potrai procedere con il pagamento
+
+Grazie per la fiducia! 
+A presto,
+Il Team Mentalità Vincente`);
+
+      navigate('/');
     } catch (error) {
-      console.error('Error submitting questionnaire:', error);
-      alert('Errore nell\'invio del questionario. Riprova più tardi.');
+      console.error('Error submitting request:', error);
+      alert('Errore nell\'invio della richiesta. Riprova più tardi.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getPrice = (plan) => {
-    return billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-  };
-
-  const getSavings = (plan) => {
-    if (billingPeriod === 'yearly' && plan.monthlyPrice > 0) {
-      const yearlyFromMonthly = plan.monthlyPrice * 12;
-      const savings = yearlyFromMonthly - plan.yearlyPrice;
-      return Math.round((savings / yearlyFromMonthly) * 100);
-    }
-    return 0;
-  };
-
-  if (loading) {
+  // Show different UI based on status
+  if (hasActiveSubscription) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            Sei già un membro Premium!
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            Hai già accesso a tutti i contenuti e funzionalità Premium.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            Torna alla Home
+          </button>
+        </div>
       </div>
     );
   }
 
+  if (hasActiveRequest) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <Clock className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
+            Richiesta in Valutazione
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-6">
+            La tua richiesta Premium è in fase di valutazione. 
+            Riceverai una risposta entro 24-48 ore.
+          </p>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            Torna alla Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentStep];
+  const progress = ((currentStep + 1) / questions.length) * 100;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Hero Section */}
       <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-purple-600/10"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/10 to-blue-600/10"></div>
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center">
             <div className="flex justify-center mb-4">
               <Crown className="h-16 w-16 text-yellow-500" />
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              Sblocca il Tuo Potenziale Mentale
+              Diventa un Atleta Premium
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-4 max-w-3xl mx-auto">
-              Scegli il piano che fa per te e porta le tue prestazioni sportive al livello successivo
+            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+              Il percorso Premium non è per tutti. È per chi è davvero determinato a fare la differenza.
             </p>
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 max-w-4xl mx-auto">
+            
+            {/* Info Box */}
+            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur rounded-xl p-6 max-w-3xl mx-auto mb-8 border border-purple-200 dark:border-purple-800">
               <div className="flex items-start space-x-3">
-                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800 dark:text-blue-200">
-                  <p className="font-semibold mb-1">Come funziona l'iscrizione:</p>
-                  <p><strong>Piano Premium:</strong> Compila un breve questionario per personalizzare il tuo percorso, poi riceverai l'approvazione entro 24 ore</p>
-                  <p><strong>Piano Gold:</strong> Prenota un colloquio conoscitivo personalizzato per creare insieme il percorso di coaching su misura</p>
+                <AlertCircle className="h-6 w-6 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
+                <div className="text-left">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+                    Come funziona la selezione Premium
+                  </h3>
+                  <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                    <li className="flex items-start">
+                      <span className="text-purple-600 dark:text-purple-400 mr-2">1.</span>
+                      <span>Compila il questionario con attenzione e sincerità</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-purple-600 dark:text-purple-400 mr-2">2.</span>
+                      <span>Valuterò personalmente la tua candidatura</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-purple-600 dark:text-purple-400 mr-2">3.</span>
+                      <span>Se selezionato, fisseremo un colloquio conoscitivo</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-purple-600 dark:text-purple-400 mr-2">4.</span>
+                      <span>Solo dopo l'approvazione potrai attivare il piano Premium</span>
+                    </li>
+                  </ul>
                 </div>
               </div>
-            </div>
-            
-            {/* Billing Toggle */}
-            <div className="flex items-center justify-center mb-8">
-              <span className={`mr-3 ${billingPeriod === 'monthly' ? 'text-gray-900 dark:text-white font-semibold' : 'text-gray-500'}`}>
-                Mensile
-              </span>
-              <button
-                onClick={() => setBillingPeriod(billingPeriod === 'monthly' ? 'yearly' : 'monthly')}
-                className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-200 dark:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    billingPeriod === 'yearly' ? 'translate-x-6' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-              <span className={`ml-3 ${billingPeriod === 'yearly' ? 'text-gray-900 dark:text-white font-semibold' : 'text-gray-500'}`}>
-                Annuale
-                <span className="ml-1 text-green-500 text-sm font-medium">Risparmia fino al 20%</span>
-              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Plans Grid */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {plans.map((plan) => {
-            const isCurrentPlan = userSubscription?.planId === plan.id;
-            const price = getPrice(plan);
-            const savings = getSavings(plan);
-            
-            return (
-              <div
-                key={plan.id}
-                className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden transform transition-all hover:scale-105 ${
-                  plan.popular ? 'ring-2 ring-blue-500' : ''
+      {/* Questionnaire Form */}
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+          {/* Progress Bar */}
+          <div className="bg-gray-50 dark:bg-gray-700 px-6 py-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                Domanda {currentStep + 1} di {questions.length}
+              </span>
+              <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                {Math.round(progress)}% completato
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+              <div 
+                className="bg-gradient-to-r from-purple-600 to-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Question Content */}
+          <div className="p-8">
+            <div className="flex items-center mb-6">
+              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg mr-4">
+                {currentQuestion.icon}
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-500 dark:text-gray-400">
+                  {currentQuestion.title}
+                </h3>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {currentQuestion.question}
+                </h2>
+              </div>
+            </div>
+
+            {/* Input Field */}
+            <div className="mb-8">
+              {currentQuestion.type === 'text' && (
+                <input
+                  type="text"
+                  value={formData[currentQuestion.id] || ''}
+                  onChange={(e) => handleInputChange(currentQuestion.id, e.target.value)}
+                  placeholder={currentQuestion.placeholder}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg"
+                />
+              )}
+
+              {currentQuestion.type === 'select' && (
+                <select
+                  value={formData[currentQuestion.id] || ''}
+                  onChange={(e) => handleInputChange(currentQuestion.id, e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg cursor-pointer"
+                >
+                  <option value="">Seleziona un'opzione...</option>
+                  {currentQuestion.options.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {currentQuestion.type === 'textarea' && (
+                <textarea
+                  value={formData[currentQuestion.id] || ''}
+                  onChange={(e) => handleInputChange(currentQuestion.id, e.target.value)}
+                  placeholder={currentQuestion.placeholder}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg resize-none"
+                />
+              )}
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex justify-between items-center">
+              <button
+                onClick={handlePrevious}
+                disabled={currentStep === 0}
+                className={`flex items-center space-x-2 px-6 py-3 rounded-lg font-medium transition-all ${
+                  currentStep === 0 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
                 }`}
               >
-                {/* Badge */}
-                {plan.badge && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-1 rounded-bl-lg text-sm font-semibold">
-                    {plan.badge}
-                  </div>
-                )}
+                <ChevronLeft className="h-5 w-5" />
+                <span>Indietro</span>
+              </button>
 
-                {/* Header */}
-                <div className={`p-8 text-center bg-gradient-to-br ${
-                  plan.color === 'purple' ? 'from-purple-500 to-pink-500' :
-                  plan.color === 'blue' ? 'from-blue-500 to-cyan-500' :
-                  'from-gray-400 to-gray-500'
-                } text-white`}>
-                  <div className="text-5xl mb-3">{plan.icon}</div>
-                  <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                  
-                  {/* Price */}
-                  <div className="mb-4">
-                    {price === 0 ? (
-                      <div className="text-4xl font-bold">Gratis</div>
-                    ) : (
-                      <>
-                        <div className="text-4xl font-bold">
-                          €{price}
-                          <span className="text-lg font-normal">
-                            /{billingPeriod === 'monthly' ? 'mese' : 'anno'}
-                          </span>
-                        </div>
-                        {savings > 0 && (
-                          <div className="mt-1 text-sm bg-white/20 rounded-full px-3 py-1 inline-block">
-                            Risparmi il {savings}%
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-                  {isCurrentPlan && (
-                    <div className="bg-white/20 rounded-full px-4 py-2 text-sm font-semibold">
-                      Piano Attuale
-                    </div>
+              {currentStep < questions.length - 1 ? (
+                <button
+                  onClick={handleNext}
+                  className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-all"
+                >
+                  <span>Avanti</span>
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-medium hover:from-green-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                      <span>Invio in corso...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-5 w-5" />
+                      <span>Invia Candidatura</span>
+                    </>
                   )}
-                </div>
+                </button>
+              )}
+            </div>
 
-                {/* Features */}
-                <div className="p-8">
-                  <div className="space-y-4 mb-8">
-                    {plan.features.map((feature, index) => (
-                      <div key={index} className="flex items-start">
-                        <Check className="h-5 w-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
-                        <span className="text-gray-700 dark:text-gray-300">{feature}</span>
-                      </div>
-                    ))}
-                    
-                    {plan.limitations && plan.limitations.length > 0 && (
-                      <>
-                        {plan.limitations.map((limitation, index) => (
-                          <div key={index} className="flex items-start opacity-50">
-                            <X className="h-5 w-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" />
-                            <span className="text-gray-500 dark:text-gray-400 line-through">
-                              {limitation}
-                            </span>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-
-                  {/* CTA Button */}
-                  <button
-                    onClick={() => handleSelectPlan(plan)}
-                    disabled={isCurrentPlan}
-                    className={`w-full py-3 px-6 rounded-lg font-semibold transition-all ${
-                      isCurrentPlan
-                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                        : plan.color === 'purple'
-                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-purple-600 hover:to-pink-600'
-                        : plan.color === 'blue'
-                        ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600'
-                        : 'bg-gray-500 text-white hover:bg-gray-600'
-                    }`}
-                  >
-                    {isCurrentPlan 
-                      ? 'Piano Attuale' 
-                      : price === 0 
-                        ? 'Inizia Gratis' 
-                        : plan.name?.toLowerCase().includes('gold') || plan.name?.toLowerCase().includes('elite')
-                          ? 'Prenota Colloquio'
-                          : 'Compila Questionario'
-                    }
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+            {/* Skip Navigation Dots */}
+            <div className="flex justify-center mt-8 space-x-2">
+              {questions.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentStep(index)}
+                  className={`w-2 h-2 rounded-full transition-all ${
+                    index === currentStep 
+                      ? 'w-8 bg-purple-600' 
+                      : formData[questions[index].id]
+                        ? 'bg-purple-400'
+                        : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                  aria-label={`Vai alla domanda ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Benefits Section */}
-        <div className="mt-16 bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
-          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-8">
-            Perché Passare a Premium?
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Risultati Misurabili
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Traccia i tuoi progressi con statistiche avanzate e report personalizzati
-              </p>
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
+            <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+              <Brain className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
-
-            <div className="text-center">
-              <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <Users className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Community Esclusiva
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Accedi a gruppi privati e connettiti con atleti d'élite
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="bg-green-100 dark:bg-green-900/30 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                <Award className="h-8 w-8 text-green-600 dark:text-green-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Certificazioni
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Ottieni certificati riconosciuti al completamento dei programmi
-              </p>
-            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Percorso Personalizzato
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Un programma su misura per le tue esigenze specifiche
+            </p>
           </div>
-        </div>
 
-        {/* FAQ Section */}
-        <div className="mt-16">
-          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-8">
-            Domande Frequenti
-          </h2>
-          
-          <div className="space-y-4">
-            <details className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 cursor-pointer">
-              <summary className="font-semibold text-gray-900 dark:text-white flex items-center justify-between">
-                Posso cambiare piano in qualsiasi momento?
-                <ChevronRight className="h-5 w-5" />
-              </summary>
-              <p className="mt-4 text-gray-600 dark:text-gray-300">
-                Sì, puoi fare upgrade o downgrade del tuo piano in qualsiasi momento. Le modifiche saranno effettive dal prossimo ciclo di fatturazione.
-              </p>
-            </details>
-
-            <details className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 cursor-pointer">
-              <summary className="font-semibold text-gray-900 dark:text-white flex items-center justify-between">
-                Come funziona la prova gratuita?
-                <ChevronRight className="h-5 w-5" />
-              </summary>
-              <p className="mt-4 text-gray-600 dark:text-gray-300">
-                Il piano Basic è sempre gratuito. Per i piani Pro ed Elite, offriamo una garanzia di rimborso di 30 giorni.
-              </p>
-            </details>
-
-            <details className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 cursor-pointer">
-              <summary className="font-semibold text-gray-900 dark:text-white flex items-center justify-between">
-                Quali metodi di pagamento accettate?
-                <ChevronRight className="h-5 w-5" />
-              </summary>
-              <p className="mt-4 text-gray-600 dark:text-gray-300">
-                Accettiamo tutte le principali carte di credito/debito, PayPal e bonifico bancario per i piani annuali.
-              </p>
-            </details>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
+            <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+              <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Coaching 1-on-1
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Sessioni individuali con mental coach esperti
+            </p>
           </div>
-        </div>
 
-        {/* Contact Section */}
-        <div className="mt-16 text-center">
-          <p className="text-gray-600 dark:text-gray-300 mb-4">
-            Hai bisogno di aiuto per scegliere il piano giusto?
-          </p>
-          <button
-            onClick={() => navigate('/contact')}
-            className="inline-flex items-center px-6 py-3 bg-gray-800 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
-          >
-            <Info className="h-5 w-5 mr-2" />
-            Contatta il Supporto
-          </button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center">
+            <div className="bg-green-100 dark:bg-green-900/30 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
+              <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-white mb-2">
+              Risultati Misurabili
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Monitoraggio continuo dei tuoi progressi
+            </p>
+          </div>
         </div>
       </div>
-
-      {/* Questionnaire Modal for Premium Plan */}
-      {showQuestionnaireModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Questionario Premium
-                  </h2>
-                  <p className="text-gray-600 dark:text-gray-300 mt-1">
-                    Aiutaci a personalizzare il tuo percorso
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowQuestionnaireModal(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="mt-4">
-                <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400">
-                  <span>Domanda {currentQuestion + 1} di {premiumQuestions.length}</span>
-                  <span>{Math.round(((currentQuestion + 1) / premiumQuestions.length) * 100)}% completato</span>
-                </div>
-                <div className="mt-2 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
-                    style={{ width: `${((currentQuestion + 1) / premiumQuestions.length) * 100}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6">
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  {premiumQuestions[currentQuestion].question}
-                </h3>
-                
-                {premiumQuestions[currentQuestion].type === 'text' && (
-                  <input
-                    type="text"
-                    value={questionnaireData[premiumQuestions[currentQuestion].id] || ''}
-                    onChange={(e) => setQuestionnaireData(prev => ({
-                      ...prev,
-                      [premiumQuestions[currentQuestion].id]: e.target.value
-                    }))}
-                    placeholder={premiumQuestions[currentQuestion].placeholder}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                )}
-                
-                {premiumQuestions[currentQuestion].type === 'textarea' && (
-                  <textarea
-                    value={questionnaireData[premiumQuestions[currentQuestion].id] || ''}
-                    onChange={(e) => setQuestionnaireData(prev => ({
-                      ...prev,
-                      [premiumQuestions[currentQuestion].id]: e.target.value
-                    }))}
-                    placeholder={premiumQuestions[currentQuestion].placeholder}
-                    rows={4}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                )}
-                
-                {premiumQuestions[currentQuestion].type === 'select' && (
-                  <select
-                    value={questionnaireData[premiumQuestions[currentQuestion].id] || ''}
-                    onChange={(e) => setQuestionnaireData(prev => ({
-                      ...prev,
-                      [premiumQuestions[currentQuestion].id]: e.target.value
-                    }))}
-                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  >
-                    <option value="">Seleziona...</option>
-                    {premiumQuestions[currentQuestion].options.map(option => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div className="flex justify-between">
-                <button
-                  onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
-                  disabled={currentQuestion === 0}
-                  className="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Indietro
-                </button>
-                
-                {currentQuestion < premiumQuestions.length - 1 ? (
-                  <button
-                    onClick={() => setCurrentQuestion(currentQuestion + 1)}
-                    disabled={!questionnaireData[premiumQuestions[currentQuestion].id]}
-                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Avanti
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleQuestionnaireSubmit}
-                    disabled={!questionnaireData[premiumQuestions[currentQuestion].id]}
-                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Invia Richiesta
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

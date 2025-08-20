@@ -10,6 +10,12 @@ const AudioPage = () => {
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  
+  // DEBUG: Log quando il componente monta
+  useEffect(() => {
+    console.log('🎧 AudioPage mounted, navigate function:', navigate);
+    console.log('🎧 Current location:', window.location.pathname);
+  }, []);
 
   useEffect(() => {
     const fetchAudios = async () => {
@@ -30,6 +36,7 @@ const AudioPage = () => {
         });
         
         console.log('Audio trovati:', audiosData.length);
+        console.log('🔍 AUDIO IDS:', audiosData.map(a => ({ id: a.id, title: a.title })));
 
         // Se ancora non ci sono dati, usa dati mock
         if (audiosData.length === 0) {
@@ -143,7 +150,10 @@ const AudioPage = () => {
               <div
                 key={audio.id}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
-                onClick={() => navigate(`/audio/${audio.id}`)}
+                onClick={() => {
+                  console.log('🎵 Navigating to audio detail:', `/audio/${audio.id}`);
+                  navigate(`/audio/${audio.id}`);
+                }}
               >
                 <div className="p-6">
                   <div className="flex items-start justify-between">
@@ -176,7 +186,14 @@ const AudioPage = () => {
                       </div>
                     </div>
                     
-                    <button className="ml-4 p-3 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors">
+                    <button 
+                      className="ml-4 p-3 bg-green-500 hover:bg-green-600 text-white rounded-full transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        console.log('🔴 PLAY BUTTON CLICKED - navigating to:', `/audio/${audio.id}`);
+                        navigate(`/audio/${audio.id}`);
+                      }}
+                    >
                       <Play className="h-5 w-5" />
                     </button>
                   </div>

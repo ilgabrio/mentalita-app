@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, CheckCircle, AlertCircle, Music } from 'lucide-react';
 import { db } from '../config/firebase';
-import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, setDoc, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
 const ExercisePracticePage = () => {
@@ -14,11 +14,26 @@ const ExercisePracticePage = () => {
   const [answers, setAnswers] = useState({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [availableAudios, setAvailableAudios] = useState([]);
   
   // Check if coming from onboarding
   const urlParams = new URLSearchParams(window.location.search);
   const fromOnboarding = urlParams.get('from') === 'onboarding';
   const onboardingDay = urlParams.get('day') || urlParams.get('step'); // Support both day and step for backward compatibility
+
+  const fetchAvailableAudios = async () => {
+    try {
+      const audiosQuery = collection(db, 'audioContent');
+      const snapshot = await getDocs(audiosQuery);
+      const audiosData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setAvailableAudios(audiosData);
+    } catch (error) {
+      console.error('Error loading audios:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchExercise = async () => {
@@ -62,6 +77,7 @@ const ExercisePracticePage = () => {
 
     if (id) {
       fetchExercise();
+      fetchAvailableAudios();
     }
   }, [id]);
 
@@ -116,6 +132,41 @@ const ExercisePracticePage = () => {
       
       console.log('✅ Documento creato con ID:', docRef.id);
 
+      // If coming from onboarding, also update onboarding progress
+      if (fromOnboarding && onboardingDay !== null) {
+        try {
+          const dayNumber = parseInt(onboardingDay);
+          const userProgressRef = doc(db, 'userOnboardingProgress', currentUser.uid);
+          
+          // Get current progress
+          const progressDoc = await getDoc(userProgressRef);
+          let currentProgress = { completedDays: [] };
+          
+          if (progressDoc.exists()) {
+            currentProgress = progressDoc.data();
+          }
+          
+          // Add completed day if not already there
+          const completedDays = currentProgress.completedDays || [];
+          if (!completedDays.includes(dayNumber)) {
+            completedDays.push(dayNumber);
+            completedDays.sort((a, b) => a - b); // Keep sorted
+            
+            // Update progress document
+            await setDoc(userProgressRef, {
+              ...currentProgress,
+              completedDays,
+              lastCompletedAt: new Date(),
+              userId: currentUser.uid
+            });
+            
+            console.log(`🎯 Updated onboarding progress: step ${dayNumber} completed, total steps: ${completedDays.length}`);
+          }
+        } catch (error) {
+          console.error('❌ Error updating onboarding progress:', error);
+        }
+      }
+
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       
@@ -124,6 +175,11 @@ const ExercisePracticePage = () => {
         setTimeout(() => {
           navigate(`/onboarding?completed=true&day=${onboardingDay}`);
         }, 1500);
+      } else {
+        // For regular exercises, redirect to exercises page after a short delay
+        setTimeout(() => {
+          navigate('/exercises');
+        }, 2000);
       }
       
       console.log('✅ Risposte salvate con successo!');
@@ -241,6 +297,103 @@ const ExercisePracticePage = () => {
                 </label>
               ))}
             </div>
+          </div>
+        );
+
+      case 'audio':
+        const selectedAudio = availableAudios.find(audio => audio.id === element.audioId);
+        console.log('🎵 Audio Debug:', { 
+          elementAudioId: element.audioId, 
+          availableAudiosCount: availableAudios.length,
+          availableAudioIds: availableAudios.map(a => a.id),
+          selectedAudio: selectedAudio ? {
+            title: selectedAudio.title,
+            audioUrl: selectedAudio.audioUrl,
+            hasAudioUrl: !!selectedAudio.audioUrl
+          } : 'NOT_FOUND',
+          fullSelectedAudio: selectedAudio,
+          allAudiosStructure: availableAudios.map(a => ({
+            id: a.id,
+            title: a.title,
+            hasAudioUrl: !!a.audioUrl,
+            audioUrl: a.audioUrl?.substring(0, 50) + '...' // mostra primi 50 caratteri
+          }))
+        });
+        return (
+          <div key={elementId || index} className="mb-8">
+            <label className="block text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              {title || `Audio ${index + 1}`}
+            </label>
+            {description && (
+              <p className="text-gray-600 dark:text-gray-300 mb-4 text-sm">
+                {description}
+              </p>
+            )}
+            {selectedAudio ? (
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Music className="h-6 w-6 text-blue-500" />
+                  <div>
+                    <h4 className="font-medium text-gray-900 dark:text-white">{selectedAudio.title}</h4>
+                    {selectedAudio.duration && (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Durata: {selectedAudio.duration}</p>
+                    )}
+                    {selectedAudio.category && (
+                      <p className="text-sm text-blue-600 dark:text-blue-400">{selectedAudio.category}</p>
+                    )}
+                  </div>
+                </div>
+                {(() => {
+                  // Cerca l'URL audio in vari campi possibili
+                  const audioUrl = selectedAudio.audioUrl || 
+                                   selectedAudio.url || 
+                                   selectedAudio.fileUrl || 
+                                   selectedAudio.audioFile || 
+                                   selectedAudio.file || 
+                                   selectedAudio.src ||
+                                   selectedAudio.audioSrc;
+                  
+                  console.log('🔍 Audio URL Search:', {
+                    audioUrl: audioUrl,
+                    allFields: Object.keys(selectedAudio),
+                    fieldValues: {
+                      audioUrl: selectedAudio.audioUrl,
+                      url: selectedAudio.url,
+                      fileUrl: selectedAudio.fileUrl,
+                      audioFile: selectedAudio.audioFile,
+                      file: selectedAudio.file,
+                      src: selectedAudio.src,
+                      audioSrc: selectedAudio.audioSrc
+                    }
+                  });
+                  
+                  return audioUrl ? (
+                    <audio controls className="w-full">
+                      <source src={audioUrl} type="audio/mpeg" />
+                      <source src={audioUrl} type="audio/wav" />
+                      <source src={audioUrl} type="audio/ogg" />
+                      Il tuo browser non supporta l'elemento audio.
+                    </audio>
+                  ) : (
+                    <div className="text-center py-6 text-gray-500 dark:text-gray-400">
+                      <Music className="h-8 w-8 mx-auto mb-2" />
+                      <p>URL audio non disponibile</p>
+                      <p className="text-xs mt-2">Campi disponibili: {Object.keys(selectedAudio).join(', ')}</p>
+                    </div>
+                  );
+                })()}
+                {selectedAudio.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-3">
+                    {selectedAudio.description}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 text-center">
+                <Music className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-gray-500 dark:text-gray-400">Audio non trovato</p>
+              </div>
+            )}
           </div>
         );
 

@@ -9,32 +9,56 @@ service cloud.firestore {
     
     // Regole specifiche per scrittura
     
-    // Users can read/write their own data
+    // Users can read/write their own data, admins can modify any user
     match /users/{userId} {
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && 
+        (request.auth.uid == userId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
     }
     
-    // User subcollections
+    // User subcollections - users can write their own, admins can modify any
     match /users/{userId}/{document=**} {
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && 
+        (request.auth.uid == userId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
     }
     
-    // Exercise responses - users can write their own
+    // Exercise responses - users can write their own, admins can modify any
     match /exerciseResponses/{document} {
       allow write: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
+        (request.resource.data.userId == request.auth.uid ||
+         resource.data.userId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
     }
     
-    // Exercise sessions - users can write their own
+    // Exercise sessions - users can write their own, admins can modify any
     match /exerciseSessions/{document} {
       allow write: if request.auth != null && 
-        request.resource.data.userId == request.auth.uid;
+        (request.resource.data.userId == request.auth.uid ||
+         resource.data.userId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
     }
     
-    // Questionnaires - users can write their own
+    // Questionnaires - users can write their own, admins can modify any
     match /questionnaires/{document} {
-      allow write: if request.auth != null && 
+      allow create: if request.auth != null && 
         request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+        (resource.data.userId == request.auth.uid ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
+    }
+    
+    // User onboarding progress - users can write their own (document ID = userId)
+    match /userOnboardingProgress/{userId} {
+      allow write: if request.auth != null && 
+        (request.auth.uid == userId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+         request.auth.token.email == 'ilgabrio@gmail.com');
     }
     
     // Premium requests - users can create their own

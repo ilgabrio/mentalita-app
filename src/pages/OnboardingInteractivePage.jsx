@@ -10,13 +10,16 @@ import {
   FileText,
   RotateCcw,
   Home,
-  Calendar
+  Calendar,
+  User,
+  Crown
 } from 'lucide-react';
 import { db } from '../config/firebase';
 import { 
   doc, 
   getDoc, 
-  updateDoc, 
+  updateDoc,
+  setDoc,
   collection, 
   getDocs,
   query,
@@ -48,13 +51,27 @@ const OnboardingInteractivePage = () => {
       // Fetch onboarding settings
       const settingsDoc = await getDoc(doc(db, 'onboardingSettings', 'default'));
       
+      // Fetch user progress se esiste
+      let userProgress = null;
+      if (currentUser) {
+        const progressDoc = await getDoc(doc(db, 'userOnboardingProgress', currentUser.uid));
+        if (progressDoc.exists()) {
+          userProgress = progressDoc.data();
+          console.log('📱 User onboarding progress loaded:', userProgress);
+        }
+      }
+      
+      let settingsData;
+      
       if (!settingsDoc.exists()) {
         console.log('🔍 No onboarding settings found in database');
         setSettings(null);
         return;
+      } else {
+        settingsData = settingsDoc.data();
+        setSettings(settingsData);
+        console.log('✅ Loaded onboarding settings from admin:', settingsData);
       }
-
-      const settingsData = settingsDoc.data();
       
       if (!settingsData.enabled || !settingsData.days || settingsData.days.length === 0) {
         console.log('Onboarding not enabled or no days configured');
@@ -63,6 +80,33 @@ const OnboardingInteractivePage = () => {
       }
 
       setSettings(settingsData);
+      
+      // Applica il progresso utente se esiste
+      if (userProgress) {
+        // Imposta il giorno corrente basandosi sul progresso
+        if (userProgress.currentDay && userProgress.currentDay <= settingsData.days.length) {
+          setCurrentDay(userProgress.currentDay);
+          console.log('📱 Resumed onboarding at day:', userProgress.currentDay);
+        }
+        
+        // Imposta i giorni completati
+        if (userProgress.completedDays && Array.isArray(userProgress.completedDays)) {
+          setCompletedDays(new Set(userProgress.completedDays));
+          console.log('📱 Restored completed days:', userProgress.completedDays);
+        }
+      } else {
+        // Nuovo utente - crea progresso iniziale
+        console.log('📱 New user starting interactive onboarding');
+        if (currentUser) {
+          setDoc(doc(db, 'userOnboardingProgress', currentUser.uid), {
+            currentDay: 1,
+            completedDays: [],
+            startedAt: new Date(),
+            lastUpdated: new Date(),
+            userId: currentUser.uid
+          }, { merge: true }).catch(console.error);
+        }
+      }
 
       // Collect all IDs
       const allExerciseIds = new Set();
@@ -142,6 +186,7 @@ const OnboardingInteractivePage = () => {
       
       // Save to localStorage
       localStorage.setItem('onboardingCompleted', 'true');
+      localStorage.setItem('interactiveOnboardingCompleted', 'true');
       
       // Save to Firestore if user is logged in
       if (currentUser) {
@@ -171,7 +216,17 @@ const OnboardingInteractivePage = () => {
     }
     
     if (currentDay < settings.days.length) {
-      setCurrentDay(currentDay + 1);
+      const nextDayNumber = currentDay + 1;
+      setCurrentDay(nextDayNumber);
+      
+      // Salva progresso
+      if (currentUser) {
+        setDoc(doc(db, 'userOnboardingProgress', currentUser.uid), {
+          currentDay: nextDayNumber,
+          lastUpdated: new Date(),
+          userId: currentUser.uid
+        }, { merge: true }).catch(console.error);
+      }
     } else {
       completeOnboarding();
     }
@@ -179,7 +234,17 @@ const OnboardingInteractivePage = () => {
 
   const prevDay = () => {
     if (currentDay > 1) {
-      setCurrentDay(currentDay - 1);
+      const prevDayNumber = currentDay - 1;
+      setCurrentDay(prevDayNumber);
+      
+      // Salva progresso
+      if (currentUser) {
+        setDoc(doc(db, 'userOnboardingProgress', currentUser.uid), {
+          currentDay: prevDayNumber,
+          lastUpdated: new Date(),
+          userId: currentUser.uid
+        }, { merge: true }).catch(console.error);
+      }
     }
   };
 
@@ -206,9 +271,12 @@ const OnboardingInteractivePage = () => {
     // Save to Firestore
     if (currentUser) {
       const newCompletedDays = [...completedDays, dayNumber];
-      updateDoc(doc(db, 'users', currentUser.uid), {
-        completedOnboardingDays: newCompletedDays
-      }).catch(console.error);
+      setDoc(doc(db, 'userOnboardingProgress', currentUser.uid), {
+        completedDays: newCompletedDays,
+        currentDay: dayNumber + 1,
+        lastUpdated: new Date(),
+        userId: currentUser.uid
+      }, { merge: true }).catch(console.error);
     }
   };
 
@@ -228,12 +296,6 @@ const OnboardingInteractivePage = () => {
         userProfile
       });
       
-      // If user hasn't completed the initial onboarding, send them there
-      if (localOnboarding !== 'true' && firestoreOnboarding !== true) {
-        console.log('📍 User needs initial onboarding - redirecting');
-        navigate('/onboarding-steps'); // O qualunque sia la route dell'onboarding iniziale
-        return;
-      }
       
       // If user hasn't completed questionnaire, send them there
       if (questionnaireCompleted !== 'true' && !userProfile?.initialQuestionnaireCompleted) {
@@ -262,8 +324,22 @@ const OnboardingInteractivePage = () => {
     if (fromExercise && dayParam !== null) {
       const dayNumber = parseInt(dayParam);
       markDayCompleted(dayNumber);
-      setCurrentDay(dayNumber);
-      // Clean up URL
+      
+      // Auto-redirect to next step if not the last one
+      if (dayNumber < 7) {
+        const nextDay = dayNumber + 1;
+        console.log(`✅ Step ${dayNumber} completed! Redirecting to step ${nextDay}`);
+        setCurrentDay(nextDay);
+        // Clean up URL
+        window.history.replaceState({}, '', '/onboarding');
+      } else {
+        console.log('🎉 All onboarding steps completed! Redirecting to completion page');
+        // Last step completed - redirect to completion/thank you page
+        navigate('/onboarding/complete');
+        return;
+      }
+      
+      // Clean up URL for intermediate steps
       window.history.replaceState({}, '', '/onboarding');
     }
   }, []);
@@ -329,21 +405,12 @@ const OnboardingInteractivePage = () => {
         />
       </div>
 
-      {/* Skip Button */}
-      <div className="absolute top-4 right-4 z-10">
-        <button
-          onClick={skipOnboarding}
-          className="px-4 py-2 text-sm bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg transition-colors text-white"
-        >
-          Salta introduzione
-        </button>
-      </div>
 
       {/* Day Counter */}
       <div className="absolute top-4 left-4 z-10">
         <div className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-full text-white text-sm font-medium flex items-center gap-2">
           <Calendar className="h-4 w-4" />
-          Giorno {currentDay} di {sortedDays.length}
+          Passo {currentDay} di {sortedDays.length}
         </div>
       </div>
 
@@ -363,7 +430,7 @@ const OnboardingInteractivePage = () => {
           <div className="text-center mb-12">
             {/* Title */}
             <h1 className="text-4xl md:text-5xl font-bold mb-6 text-white animate-fade-in">
-              {currentDayData.title || `Giorno ${currentDay}`}
+              Passo {currentDay}
             </h1>
 
             {/* Description */}
@@ -373,44 +440,6 @@ const OnboardingInteractivePage = () => {
               </p>
             )}
 
-            {/* Videos Section */}
-            {currentDayData.videos && currentDayData.videos.length > 0 && (
-              <div className="mb-12 space-y-6 animate-fade-in-delay-2">
-                {currentDayData.videos.map(videoId => {
-                  const video = videos[videoId];
-                  if (!video) return null;
-
-                  return (
-                    <div key={videoId} className="max-w-3xl mx-auto">
-                      <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6">
-                        <h3 className="text-lg font-semibold text-white mb-4">{video.title}</h3>
-                        <div className="aspect-w-16 aspect-h-9 rounded-lg overflow-hidden shadow-xl bg-black">
-                          {video.videoUrl && getYoutubeVideoId(video.videoUrl) ? (
-                            <iframe
-                              src={`https://www.youtube.com/embed/${getYoutubeVideoId(video.videoUrl)}`}
-                              title={video.title}
-                              frameBorder="0"
-                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                              allowFullScreen
-                              className="w-full h-full"
-                              style={{ minHeight: '400px' }}
-                            />
-                          ) : (
-                            <div className="flex items-center justify-center h-full" style={{ minHeight: '400px' }}>
-                              <div className="text-center text-white/70">
-                                <Play className="h-16 w-16 mx-auto mb-4" />
-                                <p className="text-lg font-medium">{video.title}</p>
-                                <p className="text-sm opacity-70">Video non disponibile</p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
 
             {/* Action Buttons */}
             <div className="space-y-6 animate-fade-in-delay-3">
@@ -501,7 +530,7 @@ const OnboardingInteractivePage = () => {
                     <div className="flex items-center space-x-3">
                       <CheckCircle className="h-6 w-6 text-green-400" />
                       <p className="text-green-200 font-medium">
-                        Giorno {currentDay} completato! Ottimo lavoro!
+                        Passo {currentDay} completato! Ottimo lavoro!
                       </p>
                     </div>
                   </div>
@@ -533,7 +562,7 @@ const OnboardingInteractivePage = () => {
               }`}
             >
               <ArrowLeft className="h-5 w-5" />
-              <span>Giorno Precedente</span>
+              <span>Passo Precedente</span>
             </button>
 
             {/* Day Indicators */}
@@ -551,7 +580,7 @@ const OnboardingInteractivePage = () => {
                       ? 'w-3 bg-white/40'
                       : 'w-3 bg-white/20'
                   }`}
-                  title={`Giorno ${day.day}${completedDays.has(day.day) ? ' (Completato)' : ''}`}
+                  title={`Passo ${day.day}${completedDays.has(day.day) ? ' (Completato)' : ''}`}
                 />
               ))}
             </div>
@@ -567,7 +596,7 @@ const OnboardingInteractivePage = () => {
               }`}
             >
               <span>
-                {currentDay === sortedDays.length ? 'Completa Percorso' : 'Giorno Successivo'}
+                {currentDay === sortedDays.length ? 'Completa Percorso' : 'Passo Successivo'}
               </span>
               {currentDay === sortedDays.length ? (
                 <CheckCircle className="h-5 w-5" />
@@ -576,6 +605,35 @@ const OnboardingInteractivePage = () => {
               )}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Menu Bottom - SOLO per Onboarding */}
+      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-sm border-t border-white/10 z-50">
+        <div className="flex justify-around items-center py-3 px-4">
+          <button
+            onClick={() => navigate('/exercises')}
+            className="flex flex-col items-center space-y-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Home className="h-5 w-5" />
+            <span className="text-xs font-medium">Home</span>
+          </button>
+          
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex flex-col items-center space-y-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <User className="h-5 w-5" />
+            <span className="text-xs font-medium">Profilo</span>
+          </button>
+          
+          <button
+            onClick={() => navigate('/premium')}
+            className="flex flex-col items-center space-y-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <Crown className="h-5 w-5" />
+            <span className="text-xs font-medium">Premium</span>
+          </button>
         </div>
       </div>
 

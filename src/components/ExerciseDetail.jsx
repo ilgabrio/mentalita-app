@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Book, Moon, Sun } from 'lucide-react';
+import { ArrowLeft, Play, Book, Moon, Sun, Video } from 'lucide-react';
 import { db } from '../config/firebase';
-import { doc, getDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { getYouTubeEmbedUrl } from '../utils/youtubeUtils';
 
 const ExerciseDetail = () => {
   const { id } = useParams();
@@ -14,6 +15,91 @@ const ExerciseDetail = () => {
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [videoError, setVideoError] = useState(false);
+  const [exerciseVideos, setExerciseVideos] = useState([]);
+
+  const loadExerciseVideos = async (exerciseData) => {
+    try {
+      const videos = [];
+      
+      // Se l'esercizio ha selectedVideos (può essere array di ID o array di oggetti)
+      if (exerciseData.selectedVideos) {
+        console.log('📹 Caricamento video da selectedVideos:', exerciseData.selectedVideos);
+        
+        // Assicuriamoci che sia un array
+        const videoItems = Array.isArray(exerciseData.selectedVideos) 
+          ? exerciseData.selectedVideos 
+          : [exerciseData.selectedVideos];
+        
+        for (const videoItem of videoItems) {
+          // Se è già un oggetto video completo, aggiungilo direttamente
+          if (videoItem && typeof videoItem === 'object' && videoItem.id) {
+            console.log('✅ Video oggetto già presente:', videoItem.id);
+            videos.push(videoItem);
+            continue;
+          }
+          
+          // Se è una stringa ID, caricalo da Firebase
+          if (typeof videoItem === 'string' && videoItem.trim()) {
+            try {
+              // Prima prova appVideos
+              let videoDoc = await getDoc(doc(db, 'appVideos', videoItem));
+              
+              if (!videoDoc.exists()) {
+                // Se non trovato in appVideos, prova videos
+                videoDoc = await getDoc(doc(db, 'videos', videoItem));
+              }
+              
+              if (videoDoc.exists()) {
+                videos.push({ id: videoDoc.id, ...videoDoc.data() });
+                console.log('✅ Video caricato da ID:', videoDoc.id);
+              } else {
+                console.log('❌ Video non trovato con ID:', videoItem);
+              }
+            } catch (error) {
+              console.error('❌ Errore caricamento video da ID:', videoItem, error);
+            }
+          } else {
+            console.warn('⚠️ Elemento video non valido:', videoItem);
+          }
+        }
+      }
+      
+      // Se l'esercizio ha un singolo videoId
+      else if (exerciseData.videoId) {
+        console.log('📹 Caricamento video da videoId:', exerciseData.videoId, 'Type:', typeof exerciseData.videoId);
+        
+        // Verifica che sia una stringa valida
+        if (typeof exerciseData.videoId === 'string' && exerciseData.videoId.trim()) {
+          try {
+            // Prima prova appVideos
+            let videoDoc = await getDoc(doc(db, 'appVideos', exerciseData.videoId));
+            
+            if (!videoDoc.exists()) {
+              // Se non trovato in appVideos, prova videos
+              videoDoc = await getDoc(doc(db, 'videos', exerciseData.videoId));
+            }
+            
+            if (videoDoc.exists()) {
+              videos.push({ id: videoDoc.id, ...videoDoc.data() });
+              console.log('✅ Video trovato:', videoDoc.id);
+            } else {
+              console.log('❌ Video non trovato con ID:', exerciseData.videoId);
+            }
+          } catch (error) {
+            console.error('❌ Errore caricamento video singolo:', exerciseData.videoId, error);
+          }
+        } else {
+          console.warn('⚠️ videoId non valido:', exerciseData.videoId);
+        }
+      }
+      
+      console.log('✅ Video caricati:', videos);
+      setExerciseVideos(videos);
+      
+    } catch (error) {
+      console.error('❌ Errore nel caricamento dei video:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchExercise = async () => {
@@ -28,6 +114,9 @@ const ExerciseDetail = () => {
           const data = { id: docSnap.id, ...docSnap.data() };
           console.log('✅ Esercizio trovato:', data);
           setExercise(data);
+          
+          // Carica i video associati all'esercizio
+          await loadExerciseVideos(data);
         } else {
           console.log('❌ Esercizio non trovato con ID:', id);
           // Dati mock per testing
@@ -64,6 +153,7 @@ const ExerciseDetail = () => {
     }
   }, [id]);
 
+
   const handleStartExercise = async () => {
     try {
       // Solo se l'utente è autenticato, registra l'inizio dell'esercizio
@@ -82,19 +172,6 @@ const ExerciseDetail = () => {
       // Continua comunque alla pagina dell'esercizio
       navigate(`/exercises/${exercise.id}/practice`);
     }
-  };
-
-  const getYouTubeEmbedUrl = (url) => {
-    if (!url) return '';
-    
-    // Estrai l'ID del video da diversi formati di URL YouTube
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-    const match = url.match(regExp);
-    
-    if (match && match[2].length === 11) {
-      return `https://www.youtube.com/embed/${match[2]}?rel=0&modestbranding=1&fs=1`;
-    }
-    return url;
   };
 
   if (loading) {
@@ -160,7 +237,7 @@ const ExerciseDetail = () => {
         {/* Titolo e descrizione */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-            #{exercise.category || 'II'} {exercise.title}
+            {exercise.title}
           </h1>
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-6">
             {exercise.description}
@@ -176,32 +253,81 @@ const ExerciseDetail = () => {
           </button>
         </div>
 
-        {/* Video YouTube */}
-        <div className="mb-8">
-          <div className="relative w-full bg-black rounded-lg overflow-hidden shadow-lg">
-            <div className="aspect-video">
-              {!videoError && exercise.youtubeUrl ? (
-                <iframe
-                  src={getYouTubeEmbedUrl(exercise.youtubeUrl)}
-                  className="w-full h-full"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  onError={() => setVideoError(true)}
-                  title={exercise.title}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                  <div className="text-center text-white">
-                    <Play className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                    <p className="text-lg">Video non disponibile</p>
-                    <p className="text-sm opacity-75">{exercise.title}</p>
+        {/* Video Section */}
+        {exerciseVideos.length > 0 && (
+          <div className="mb-8 space-y-6">
+            <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+              {exerciseVideos.length > 1 ? 'Video correlati' : 'Video'}
+            </h3>
+            
+            {exerciseVideos.map((video, index) => {
+              console.log('🎬 Rendering video:', video);
+              // Cerca l'URL YouTube in diversi campi possibili
+              const videoUrl = video.youtubeUrl || video.url || video.videoUrl || video.link || 
+                               (video.youtubeId ? `https://www.youtube.com/watch?v=${video.youtubeId}` : null);
+              const embedUrl = videoUrl ? getYouTubeEmbedUrl(videoUrl) : null;
+              
+              return (
+                <div key={video.id || index} className="relative w-full bg-black rounded-lg overflow-hidden shadow-lg">
+                  <div className="aspect-video">
+                    {embedUrl ? (
+                      <iframe
+                        src={embedUrl}
+                        className="w-full h-full"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        title={video.title || exercise.title}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                        <div className="text-center text-white">
+                          <Video className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                          <p className="text-lg font-medium">{video.title || 'Video'}</p>
+                          {video.description && (
+                            <p className="text-sm opacity-75 mt-2 px-4">{video.description}</p>
+                          )}
+                          {video.duration && (
+                            <p className="text-xs opacity-50 mt-1">Durata: {video.duration}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
+              );
+            })}
+          </div>
+        )}
+        
+        {/* Fallback per video nell'esercizio stesso (retrocompatibilità) */}
+        {exerciseVideos.length === 0 && exercise.youtubeUrl && (
+          <div className="mb-8">
+            <div className="relative w-full bg-black rounded-lg overflow-hidden shadow-lg">
+              <div className="aspect-video">
+                {!videoError ? (
+                  <iframe
+                    src={getYouTubeEmbedUrl(exercise.youtubeUrl)}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    onError={() => setVideoError(true)}
+                    title={exercise.title}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                    <div className="text-center text-white">
+                      <Play className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg">Video non disponibile</p>
+                      <p className="text-sm opacity-75">{exercise.title}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Sezione contenuto aggiuntivo */}
         {exercise.longDescription && (

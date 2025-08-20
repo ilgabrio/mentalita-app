@@ -14,50 +14,46 @@ const ArticlesPage = () => {
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        // Leggi dalla collezione VERA: articles
-        console.log('Caricamento articoli da Firebase...');
-        let q = query(
-          collection(db, 'articles'), 
-          where('isPublished', '==', true),
-          orderBy('publishedAt', 'desc')
-        );
+        console.log('🔍 DEBUGGING ARTICLES - Inizio caricamento...');
         
-        let querySnapshot = await getDocs(q);
-        let articlesData = [];
-        
-        querySnapshot.forEach((doc) => {
-          articlesData.push({ id: doc.id, ...doc.data() });
+        // STEP 1: Prima provo a vedere TUTTI gli articoli 
+        let allArticlesQuery = query(collection(db, 'articles'));
+        let allSnapshot = await getDocs(allArticlesQuery);
+        let allArticles = [];
+        allSnapshot.forEach((doc) => {
+          allArticles.push({ id: doc.id, ...doc.data() });
         });
         
-        console.log('Articoli trovati:', articlesData.length);
+        console.log('📊 TUTTI GLI ARTICOLI nel database:', allArticles.length);
+        console.log('📋 Dettagli articoli:', allArticles.map(art => ({
+          id: art.id,
+          title: art.title,
+          isPublished: art.isPublished,
+          status: art.status
+        })));
 
-        // Se ancora non ci sono dati, usa dati mock
-        if (articlesData.length === 0) {
-          articlesData = [
-            {
-              id: '1',
-              title: 'La Psicologia dello Sport: Come Allenare la Mente',
-              description: 'Scopri le tecniche fondamentali per sviluppare la forza mentale negli sport',
-              content: 'Contenuto completo dell\'articolo...',
-              category: 'Psicologia',
-              author: 'Dr. Marco Rossi',
-              readTime: '5 min',
-              publishedAt: new Date(),
-              isPublished: true
-            },
-            {
-              id: '2',
-              title: 'Gestire la Pressione nelle Competizioni',
-              description: 'Strategie pratiche per mantenere la calma durante le gare più importanti',
-              content: 'Contenuto completo dell\'articolo...',
-              category: 'Prestazione',
-              author: 'Coach Lisa Bianchi',
-              readTime: '8 min',
-              publishedAt: new Date(),
-              isPublished: true
-            }
-          ];
-        }
+        // STEP 2: Filtra articoli validi (come fa ExercisesPage)
+        let articlesData = allArticles.filter(art => {
+          // Considera valido un articolo se ha almeno title e content
+          return art.title && (art.content || art.body || art.description);
+        });
+        
+        // Ordina per createdAt o publishedAt se esistono
+        articlesData.sort((a, b) => {
+          if (a.publishedAt && b.publishedAt) {
+            const aDate = a.publishedAt.toDate ? a.publishedAt.toDate() : new Date(a.publishedAt);
+            const bDate = b.publishedAt.toDate ? b.publishedAt.toDate() : new Date(b.publishedAt);
+            return bDate.getTime() - aDate.getTime();
+          }
+          if (a.createdAt && b.createdAt) {
+            const aDate = a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+            const bDate = b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+            return bDate.getTime() - aDate.getTime();
+          }
+          return (a.title || '').localeCompare(b.title || '');
+        });
+        
+        console.log('✅ Articoli validi trovati:', articlesData.length);
 
         setArticles(articlesData);
         
@@ -66,20 +62,9 @@ const ArticlesPage = () => {
         setCategories(uniqueCategories);
         
       } catch (error) {
-        console.error('Errore nel caricamento degli articoli:', error);
-        // Usa dati mock in caso di errore
-        const mockData = [
-          {
-            id: '1',
-            title: 'La Psicologia dello Sport: Come Allenare la Mente',
-            description: 'Scopri le tecniche fondamentali per sviluppare la forza mentale negli sport',
-            category: 'Psicologia',
-            author: 'Dr. Marco Rossi',
-            readTime: '5 min'
-          }
-        ];
-        setArticles(mockData);
-        setCategories(['Psicologia']);
+        console.error('❌ Errore nel caricamento degli articoli:', error);
+        setArticles([]);
+        setCategories([]);
       } finally {
         setLoading(false);
       }

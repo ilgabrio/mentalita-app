@@ -44,22 +44,23 @@ const OnboardingPage = () => {
     try {
       setLoading(true);
       
-      // Fetch active onboarding steps
-      const stepsQuery = query(
-        collection(db, 'onboardingSteps'),
-        where('isActive', '==', true),
-        orderBy('order', 'asc')
-      );
-      
-      const snapshot = await getDocs(stepsQuery);
+      // Fetch all onboarding steps and filter/sort locally
+      const snapshot = await getDocs(collection(db, 'onboardingSteps'));
       const stepsData = [];
       
       snapshot.forEach((doc) => {
-        stepsData.push({
-          id: doc.id,
-          ...doc.data()
-        });
+        const data = doc.data();
+        // Only include active steps
+        if (data.isActive === true) {
+          stepsData.push({
+            id: doc.id,
+            ...data
+          });
+        }
       });
+      
+      // Sort by order locally
+      stepsData.sort((a, b) => (a.order || 0) - (b.order || 0));
 
       // Fetch exercises, articles, and videos for the steps
       const exerciseIds = [...new Set(stepsData.map(step => step.exerciseId).filter(Boolean))];
@@ -121,9 +122,39 @@ const OnboardingPage = () => {
       setArticles(articlesData);
       setVideos(videosData);
 
-      // If no steps configured, show default message
+      // If no steps configured, create default steps
       if (stepsData.length === 0) {
-        console.log('No onboarding steps configured');
+        console.log('No onboarding steps configured - creating default steps');
+        const defaultSteps = [
+          {
+            id: 'welcome',
+            title: "Benvenuto in Mentalità",
+            description: "Scopri come la forza mentale può trasformare le tue performance sportive.",
+            content: "Benvenuto nella community di atleti che vogliono sviluppare la propria forza mentale. Questo percorso ti guiderà attraverso tecniche e strategie usate dai campioni.",
+            order: 1,
+            isActive: true,
+            type: "welcome"
+          },
+          {
+            id: 'profile',
+            title: "Il Tuo Profilo Atleta", 
+            description: "Crea il tuo profilo personalizzato per un'esperienza su misura.",
+            content: "Raccontaci di te, del tuo sport e dei tuoi obiettivi. Questo ci aiuterà a personalizzare il tuo percorso di crescita mentale.",
+            order: 2,
+            isActive: true,
+            type: "profile"
+          },
+          {
+            id: 'completion',
+            title: "Completa il Setup",
+            description: "Pronto per iniziare il tuo viaggio verso l'eccellenza.",
+            content: "Perfetto! Ora sei pronto per accedere al questionario iniziale e iniziare il tuo percorso personalizzato di crescita mentale.",
+            order: 3,
+            isActive: true,
+            type: "completion"
+          }
+        ];
+        setSteps(defaultSteps);
       }
 
     } catch (error) {
@@ -232,16 +263,17 @@ const OnboardingPage = () => {
     );
   }
 
-  if (steps.length === 0) {
+  // Show fallback message only if loading is complete and still no steps
+  if (!loading && steps.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-900 to-purple-800 flex items-center justify-center">
         <div className="text-center text-white max-w-md mx-auto px-6">
           <div className="mb-8">
             <Home className="h-16 w-16 mx-auto mb-4 opacity-60" />
           </div>
-          <h1 className="text-2xl font-bold mb-4">Percorso in Configurazione</h1>
+          <h1 className="text-2xl font-bold mb-4">Errore di Configurazione</h1>
           <p className="text-lg mb-8 opacity-90">
-            Il percorso di onboarding interattivo è in fase di configurazione. 
+            Impossibile caricare l'onboarding. 
             Procedi direttamente al questionario iniziale.
           </p>
           <button

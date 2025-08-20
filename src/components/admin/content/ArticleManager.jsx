@@ -22,7 +22,8 @@ import {
   Calendar,
   User,
   Clock,
-  Star
+  Star,
+  Image
 } from 'lucide-react';
 
 const ArticleManager = () => {
@@ -247,13 +248,22 @@ const ArticleManager = () => {
             Gestione Articoli
           </h2>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Nuovo Articolo</span>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => window.open('/admin-article-images', '_blank')}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Image className="h-4 w-4" />
+            <span>Gestisci Immagini</span>
+          </button>
+          <button
+            onClick={() => openModal()}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Nuovo Articolo</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

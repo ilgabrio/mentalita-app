@@ -82,6 +82,15 @@
       ]
     },
     {
+      "collectionGroup": "onboardingSteps",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "isActive", "order": "ASCENDING"},
+        {"fieldPath": "order", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "subscriptions",
       "queryScope": "COLLECTION",
       "fields": [

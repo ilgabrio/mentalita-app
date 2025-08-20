@@ -57,7 +57,9 @@ const ExerciseManager = () => {
     tags: [],
     objectives: [],
     instructions: [],
-    selectedVideos: []
+    selectedVideos: [],
+    coverImage: '',
+    claim: ''
   });
 
   const categories = [
@@ -210,7 +212,9 @@ const ExerciseManager = () => {
         tags: exercise.tags || [],
         objectives: exercise.objectives || [],
         instructions: exercise.instructions || [],
-        selectedVideos: convertVideoIdsToObjects(exercise.selectedVideos || [])
+        selectedVideos: convertVideoIdsToObjects(exercise.selectedVideos || []),
+        coverImage: exercise.coverImage || '',
+        claim: exercise.claim || ''
       });
     } else {
       setEditingExercise(null);
@@ -226,7 +230,9 @@ const ExerciseManager = () => {
         tags: [],
         objectives: [],
         instructions: [],
-        selectedVideos: []
+        selectedVideos: [],
+        coverImage: '',
+        claim: ''
       });
     }
     setShowModal(true);
@@ -247,7 +253,9 @@ const ExerciseManager = () => {
       tags: [],
       objectives: [],
       instructions: [],
-      selectedVideos: []
+      selectedVideos: [],
+      coverImage: '',
+      claim: ''
     });
   };
 
@@ -675,6 +683,35 @@ const ExerciseManager = () => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     placeholder="Contenuto completo dell'esercizio con istruzioni dettagliate..."
                   />
+                </div>
+
+                {/* Cover Image and Claim */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      URL Immagine di Copertina
+                    </label>
+                    <input
+                      type="url"
+                      value={formData.coverImage}
+                      onChange={(e) => setFormData({ ...formData, coverImage: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="https://esempio.com/immagine.jpg"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Claim Motivazionale
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.claim}
+                      onChange={(e) => setFormData({ ...formData, claim: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                      placeholder="es. Supera i tuoi limiti"
+                    />
+                  </div>
                 </div>
 
                 {/* Video Selector */}

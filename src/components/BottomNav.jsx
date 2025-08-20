@@ -1,21 +1,22 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, PlayCircle, User, Video, Headphones, Crown } from 'lucide-react';
+import { Home, PlayCircle, User, Video, Headphones, Crown, Book, GraduationCap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const BottomNav = () => {
   const location = useLocation();
   const { userProfile } = useAuth();
   
-  // Check if onboarding is completed
-  const isOnboardingCompleted = userProfile?.onboardingCompleted === true || 
+  // Check if onboarding is completed OR if user has Champion badge
+  const championBadge = localStorage.getItem('championBadge') === 'true';
+  const isOnboardingCompleted = championBadge || // Champion badge bypassa tutto
+                               userProfile?.onboardingCompleted === true || 
                                localStorage.getItem('onboardingCompleted') === 'true';
   
+  // Solo le 4 voci principali per il bottom nav
   const allNavItems = [
     { path: '/', icon: Home, label: 'Home' },
     { path: '/exercises', icon: PlayCircle, label: 'Esercizi' },
-    { path: '/videos', icon: Video, label: 'Video', requiresOnboarding: true },
-    { path: '/audio', icon: Headphones, label: 'Audio', requiresOnboarding: true },
     { path: '/premium', icon: Crown, label: 'Premium' },
     { path: '/profile', icon: User, label: 'Profilo' }
   ];
@@ -35,13 +36,14 @@ const BottomNav = () => {
         : 'bg-white dark:bg-gray-800'
     }`}>
       <div className={`grid h-16 ${
-        navItems.length === 5 ? 'grid-cols-5' : 
         navItems.length === 4 ? 'grid-cols-4' : 
-        'grid-cols-3'
+        navItems.length === 3 ? 'grid-cols-3' : 
+        'grid-cols-4'
       }`}>
         {navItems.map((item) => {
           const IconComponent = item.icon;
           const isActive = location.pathname === item.path || 
+                          (item.path === '/' && location.pathname === '/') ||
                           (item.path === '/exercises' && location.pathname.startsWith('/exercises'));
           
           // Special styling for premium button
@@ -50,6 +52,7 @@ const BottomNav = () => {
               <Link
                 key={item.path}
                 to={item.path}
+                onClick={() => console.log('🔗 Navigazione Premium:', item.label, 'verso', item.path)}
                 className={`flex flex-col items-center justify-center gap-1 transition-colors relative ${
                   isActive 
                     ? 'text-amber-600 dark:text-amber-400' 
@@ -69,6 +72,7 @@ const BottomNav = () => {
             <Link
               key={item.path}
               to={item.path}
+              onClick={() => console.log('🔗 Navigazione:', item.label, 'verso', item.path)}
               className={`flex flex-col items-center justify-center gap-1 transition-colors ${
                 isActive 
                   ? userProfile?.isPremium ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'

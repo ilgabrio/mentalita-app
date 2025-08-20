@@ -41,7 +41,12 @@ const ExercisesPage = () => {
         
         let exercisesData = allExercises.filter(ex => {
           // Considera valido un esercizio se ha almeno title, description ed elements
-          return ex.title && ex.description && ex.elements && Array.isArray(ex.elements);
+          // E NON è un esercizio di onboarding
+          return ex.title && 
+                 ex.description && 
+                 ex.elements && 
+                 Array.isArray(ex.elements) && 
+                 !ex.isOnboarding;  // Esclude esercizi di onboarding
         });
         
         // Ordina per order se esiste, altrimenti per createdAt o title
@@ -57,12 +62,12 @@ const ExercisesPage = () => {
         
         console.log('✅ Esercizi validi trovati:', exercisesData.length);
         
-        // Se ancora pochi risultati, proviamo senza filtri
+        // Se ancora pochi risultati, proviamo senza il filtro elements ma tenendo il filtro onboarding
         if (exercisesData.length < 5) {
-          console.log('⚠️ Pochi esercizi trovati, mostro TUTTI per debug...');
-          // Filtriamo manualmente gli esercizi validi (che hanno almeno title e description)
-          exercisesData = allExercises.filter(ex => ex.title && ex.description);
-          console.log('✅ Esercizi validi (con title e description):', exercisesData.length);
+          console.log('⚠️ Pochi esercizi trovati, mostro tutti quelli non-onboarding per debug...');
+          // Filtriamo manualmente gli esercizi validi (che hanno almeno title e description) ma NON onboarding
+          exercisesData = allExercises.filter(ex => ex.title && ex.description && !ex.isOnboarding);
+          console.log('✅ Esercizi validi (non-onboarding):', exercisesData.length);
         }
 
         // Se ancora non ci sono dati, usa dati mock
@@ -198,66 +203,104 @@ const ExercisesPage = () => {
           </div>
         )}
 
-        {/* Premium CTA - Inserito ogni 3 esercizi per utenti non premium */}
-        <div className="space-y-4">
+        {/* Premium CTA - Inserito ogni 6 esercizi per utenti non premium */}
+        {!isAdmin && !userProfile?.isPremium && filteredExercises.length > 6 && (
+          <PremiumCTA variant="banner" className="mb-8" />
+        )}
+        
+        {/* Exercises Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredExercises.length > 0 ? (
             filteredExercises.map((exercise, index) => (
               <React.Fragment key={exercise.id}>
-                {/* Inserisci Premium CTA ogni 3 esercizi per utenti non premium */}
-                {!isAdmin && !userProfile?.isPremium && index > 0 && index % 3 === 0 && (
-                  <PremiumCTA variant="banner" className="my-6" />
-                )}
                 
                 <div
-                  className="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden transition-all duration-300 transform hover:scale-105 cursor-pointer"
                   onClick={() => navigate(`/exercises/${exercise.id}`)}
                 >
-                  <div className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-sm font-medium text-blue-500 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 px-2 py-1 rounded-full">
-                            {exercise.category || 'Generale'}
-                          </span>
-                          {exercise.difficulty && (
-                            <span className={`text-xs px-2 py-1 rounded-full ${getDifficultyColor(exercise.difficulty)}`}>
-                              {exercise.difficulty}
-                            </span>
-                          )}
-                        </div>
-                        
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                          {exercise.title}
-                        </h3>
-                        
-                        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2">
-                          {exercise.description}
-                        </p>
-                        
-                        <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                          {exercise.duration && (
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              <span>{exercise.duration}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1">
-                            <Star className="h-4 w-4 fill-current text-yellow-400" />
-                            <span>4.8</span>
-                          </div>
+                  {/* Cover Image */}
+                  <div className="relative h-48 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500">
+                    {exercise.coverImage ? (
+                      <img 
+                        src={exercise.coverImage} 
+                        alt={exercise.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-white text-center">
+                          <div className="text-6xl mb-2">💪</div>
+                          <div className="text-sm font-medium opacity-75">{exercise.category || 'Generale'}</div>
                         </div>
                       </div>
-                      
-                      <button className="ml-4 p-3 bg-blue-500 hover:bg-blue-600 text-white rounded-full transition-colors">
-                        <Play className="h-5 w-5" />
-                      </button>
+                    )}
+                    
+                    {/* Category Badge */}
+                    <div className="absolute top-4 left-4">
+                      <span className="px-3 py-1 bg-white/90 backdrop-blur-sm text-gray-800 text-sm font-bold rounded-full">
+                        {exercise.category || 'Generale'}
+                      </span>
                     </div>
+                    
+                    {/* Difficulty Badge */}
+                    {exercise.difficulty && (
+                      <div className="absolute top-4 right-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(exercise.difficulty)}`}>
+                          {exercise.difficulty}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Gradient Overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/50 to-transparent"></div>
+                  </div>
+
+                  <div className="p-6">
+                    
+                    {/* Claim */}
+                    {exercise.claim && (
+                      <div className="mb-3">
+                        <span className="text-blue-600 dark:text-blue-400 font-bold text-lg italic">
+                          "{exercise.claim}"
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Title */}
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                      {exercise.title}
+                    </h3>
+                    
+                    {/* Description */}
+                    <p className="text-gray-600 dark:text-gray-300 text-sm mb-6 line-clamp-3">
+                      {exercise.description}
+                    </p>
+                    
+                    {/* Stats */}
+                    <div className="flex items-center gap-4 mb-6 text-sm text-gray-500 dark:text-gray-400">
+                      {exercise.duration && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{exercise.duration}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <Star className="h-4 w-4 fill-current text-yellow-400" />
+                        <span>4.8</span>
+                      </div>
+                    </div>
+                    
+                    {/* Action Button */}
+                    <button className="w-full py-4 rounded-xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-3 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg">
+                      <Play className="h-6 w-6" />
+                      Inizia Esercizio
+                    </button>
                   </div>
                 </div>
               </React.Fragment>
             ))
           ) : (
-            <div className="text-center py-12">
+            <div className="col-span-full text-center py-12">
               <div className="text-gray-400 dark:text-gray-600 mb-4">
                 <Play className="h-16 w-16 mx-auto opacity-50" />
               </div>

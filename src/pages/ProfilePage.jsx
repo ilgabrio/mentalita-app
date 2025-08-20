@@ -21,7 +21,9 @@ import {
   FileText,
   Zap,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  MessageCircle,
+  Trophy
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -40,6 +42,14 @@ const ProfilePage = () => {
   const [showModal, setShowModal] = useState(false);
   const [exerciseDetails, setExerciseDetails] = useState({});
   const navigate = useNavigate();
+
+  // Controlla se l'utente ha completato l'onboarding
+  const isOnboardingCompleted = userProfile?.onboardingCompleted === true || 
+                               localStorage.getItem('onboardingCompleted') === 'true';
+  
+  // Controlla se ha completato il questionario
+  const hasCompletedQuestionnaire = userProfile?.initialQuestionnaireCompleted === true ||
+                                   localStorage.getItem('initialQuestionnaireCompleted') === 'true';
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -455,308 +465,444 @@ const ProfilePage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      {/* Header - Mobile ottimizzato */}
       <div className="bg-white dark:bg-gray-800 shadow-sm">
-        <div className="px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profilo</h1>
-              <p className="text-gray-600 dark:text-gray-300 mt-2">
-                Gestisci il tuo account e le tue preferenze
-              </p>
+        <div className="p-3">
+          <div className="flex flex-col space-y-1">
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-bold text-gray-900 dark:text-white">Profilo</h1>
+              {isAdmin && (
+                <div className="flex items-center space-x-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-2 py-0.5 rounded-full">
+                  <Crown className="h-3 w-3" />
+                  <span className="text-xs font-medium">Admin</span>
+                </div>
+              )}
             </div>
-            {isAdmin && (
-              <div className="flex items-center space-x-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 px-3 py-1 rounded-full">
-                <Crown className="h-4 w-4" />
-                <span className="text-sm font-medium">Admin</span>
-              </div>
-            )}
+            <p className="text-xs text-gray-600 dark:text-gray-300">
+              {!isOnboardingCompleted ? 'Completa l\'onboarding per accedere a tutte le funzioni' : 'Il tuo account e preferenze'}
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="px-4 py-6">
-        {/* Premium CTA - Sempre visibile se non è admin */}
-        {!isAdmin && !userProfile?.isPremium && (
-          <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg p-6 mb-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <Crown className="h-8 w-8 text-yellow-400" />
+      <div className="p-3 space-y-3">
+        {/* Premium CTA - Solo se onboarding completato */}
+        {!isAdmin && !userProfile?.isPremium && isOnboardingCompleted && (
+          <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg p-3 shadow-lg">
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center space-x-2">
+                <div className="bg-white/20 p-1.5 rounded-full">
+                  <Crown className="h-4 w-4 text-yellow-400" />
                 </div>
-                <div>
-                  <h3 className="text-white font-bold text-lg">Sblocca il tuo potenziale</h3>
-                  <p className="text-white/90 text-sm">Accedi a contenuti esclusivi e coaching personalizzato</p>
+                <div className="flex-1">
+                  <h3 className="text-white font-bold text-sm">Sblocca il tuo potenziale</h3>
+                  <p className="text-white/90 text-xs">Accedi a contenuti esclusivi</p>
                 </div>
               </div>
               <button
                 onClick={() => navigate('/premium')}
-                className="bg-white text-purple-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 flex items-center space-x-2"
+                className="bg-white text-purple-600 px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center justify-center space-x-1 w-full"
               >
                 <span>Scopri Premium</span>
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRight className="h-3 w-3" />
               </button>
             </div>
           </div>
         )}
 
-        {/* Upgrade CTA per utenti Premium (non Gold) */}
-        {!isAdmin && userProfile?.isPremium && userProfile?.planType !== 'gold' && (
-          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-6 mb-6 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="bg-white/20 p-3 rounded-full">
-                  <Sparkles className="h-8 w-8 text-white" />
+        {/* Upgrade CTA per utenti Premium (non Gold) - Solo se onboarding completato */}
+        {!isAdmin && userProfile?.isPremium && userProfile?.planType !== 'gold' && isOnboardingCompleted && (
+          <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-3 shadow-lg">
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center space-x-2">
+                <div className="bg-white/20 p-1.5 rounded-full">
+                  <Sparkles className="h-4 w-4 text-white" />
                 </div>
-                <div>
-                  <h3 className="text-white font-bold text-lg">Passa a Gold</h3>
-                  <p className="text-white/90 text-sm">Coaching personalizzato 1-on-1 e percorsi su misura</p>
+                <div className="flex-1">
+                  <h3 className="text-white font-bold text-sm">Passa a Gold</h3>
+                  <p className="text-white/90 text-xs">Coaching 1-on-1</p>
                 </div>
               </div>
               <button
                 onClick={() => navigate('/premium')}
-                className="bg-white text-orange-600 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-all transform hover:scale-105 flex items-center space-x-2"
+                className="bg-white text-orange-600 px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center justify-center space-x-1 w-full"
               >
-                <span>Upgrade a Gold</span>
-                <Zap className="h-5 w-5" />
+                <span>Upgrade</span>
+                <Zap className="h-3 w-3" />
               </button>
             </div>
           </div>
         )}
 
-        {/* Profile Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-              <User className="h-8 w-8 text-white" />
+        {/* Profile Card - Mobile ottimizzato */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+          <div className="flex items-center space-x-3 mb-3">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+              <User className="h-5 w-5 text-white" />
             </div>
-            <div className="flex-1">
-              <div className="flex items-center space-x-2">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center space-x-1 mb-0.5">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white truncate">
                   {userProfile?.displayName || userProfile?.name || 'Atleta'}
                 </h2>
-                {isAdmin && <Crown className="h-5 w-5 text-yellow-500" />}
-                {userProfile?.isPremium && userProfile?.planType === 'gold' && (
-                  <div className="flex items-center space-x-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
-                    <Sparkles className="h-3 w-3" />
-                    <span>GOLD</span>
-                  </div>
-                )}
-                {userProfile?.isPremium && userProfile?.planType === 'premium' && (
-                  <div className="flex items-center space-x-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
-                    <Crown className="h-3 w-3" />
-                    <span>PREMIUM</span>
-                  </div>
-                )}
+                {isAdmin && <Crown className="h-3 w-3 text-yellow-500 flex-shrink-0" />}
               </div>
-              <p className="text-gray-600 dark:text-gray-300">
+              {userProfile?.isPremium && isOnboardingCompleted && (
+                <div className="flex items-center space-x-1 mb-0.5">
+                  {userProfile?.planType === 'gold' ? (
+                    <div className="flex items-center space-x-0.5 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-1.5 py-0.5 rounded-full">
+                      <Sparkles className="h-2.5 w-2.5" />
+                      <span className="text-xs font-semibold">GOLD</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-1.5 py-0.5 rounded-full">
+                      <Crown className="h-2.5 w-2.5" />
+                      <span className="text-xs font-semibold">PREMIUM</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-gray-600 dark:text-gray-300 truncate">
                 {userProfile?.email || currentUser?.email}
               </p>
-              <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                Mentalità - Forza mentale per il tuo sport
+              <p className="text-xs text-blue-600 dark:text-blue-400">
+                Mentalità
               </p>
             </div>
           </div>
 
-          {/* User Stats */}
+          {/* User Stats - Sempre visibili */}
           {userStats && (
-            <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="grid grid-cols-3 gap-2 mb-3 p-2 bg-gray-50 dark:bg-gray-700 rounded-lg">
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
                   {userStats.completedExercises || 0}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Esercizi completati
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Esercizi
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                <div className="text-lg font-bold text-green-600 dark:text-green-400">
                   {userStats.currentStreak || 0}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Giorni consecutivi
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Streak
                 </div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
                   {badges.length}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Badge ottenuti
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  Badge
                 </div>
               </div>
             </div>
           )}
 
-          {/* Badges */}
+          {/* Badges - Sempre visibili se ci sono */}
           {badges.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">
+            <div className="mb-3">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">
                 Badge ottenuti
               </h3>
-              <div className="flex flex-wrap gap-2">
-                {badges.slice(0, 5).map((badge) => (
+              <div className="flex flex-wrap gap-1">
+                {badges.slice(0, 3).map((badge) => (
                   <div
                     key={badge.id}
-                    className="flex items-center space-x-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-sm"
+                    className="flex items-center space-x-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-2 py-0.5 rounded-full"
                   >
-                    <Award className="h-4 w-4" />
-                    <span>{badge.name}</span>
+                    <Award className="h-3 w-3" />
+                    <span className="text-xs">{badge.name}</span>
                   </div>
                 ))}
-                {badges.length > 5 && (
-                  <div className="flex items-center space-x-1 text-gray-500 dark:text-gray-400 text-sm">
-                    <Star className="h-4 w-4" />
-                    <span>+{badges.length - 5} altri</span>
+                {badges.length > 3 && (
+                  <div className="flex items-center space-x-0.5 text-gray-500 dark:text-gray-400">
+                    <Star className="h-3 w-3" />
+                    <span className="text-xs">+{badges.length - 3}</span>
                   </div>
                 )}
               </div>
             </div>
           )}
           
-          <div className="border-t border-gray-200 dark:border-gray-600 pt-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Azioni Account</h3>
+          <div className="border-t border-gray-200 dark:border-gray-600 pt-3">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Azioni</h3>
             
-            <div className="space-y-3">
+            <div className="space-y-1.5">
+              {/* Admin Panel - sempre visibile per admin */}
               {isAdmin && (
                 <button 
                   onClick={() => navigate('/admin')}
-                  className="w-full flex items-center justify-between p-4 text-left hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg transition-colors border border-yellow-200 dark:border-yellow-800"
+                  className="w-full flex items-center justify-between p-2 text-left hover:bg-yellow-50 dark:hover:bg-yellow-900/20 rounded-lg transition-colors border border-yellow-200 dark:border-yellow-800"
                 >
-                  <div className="flex items-center space-x-3">
-                    <Crown className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
-                    <span className="text-yellow-800 dark:text-yellow-300 font-medium">Pannello Admin</span>
+                  <div className="flex items-center space-x-2">
+                    <Crown className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />
+                    <span className="text-yellow-800 dark:text-yellow-300 font-medium text-xs">Admin Panel</span>
                   </div>
                 </button>
               )}
               
-              <button className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                <div className="flex items-center space-x-3">
-                  <Settings className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                  <span className="text-gray-900 dark:text-white">Impostazioni</span>
+              {/* WhatsApp - sempre visibile */}
+              <a
+                href="https://wa.me/393402904882?text=Ciao%20Gabri%2C%20ho%20una%20domanda%20su%20Mentalità"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-between p-2 text-left hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors border border-green-200 dark:border-green-800"
+              >
+                <div className="flex items-center space-x-2">
+                  <MessageCircle className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                  <span className="text-green-800 dark:text-green-300 font-medium text-xs">Chiedi a Gabri</span>
                 </div>
-              </button>
+                <div className="text-xs text-green-600 dark:text-green-400">
+                  WhatsApp
+                </div>
+              </a>
               
-              <button className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                <div className="flex items-center space-x-3">
-                  <Shield className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                  <span className="text-gray-900 dark:text-white">Privacy</span>
-                </div>
-              </button>
+              {/* Onboarding progress per utenti non completati */}
+              {!isOnboardingCompleted && (
+                <button
+                  onClick={() => {
+                    if (!hasCompletedQuestionnaire) {
+                      navigate('/questionnaire/initial');
+                    } else {
+                      navigate('/onboarding');
+                    }
+                  }}
+                  className="w-full flex items-center justify-between p-2 text-left hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors border border-blue-200 dark:border-blue-800"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Target className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-blue-800 dark:text-blue-300 font-medium text-xs">
+                      {!hasCompletedQuestionnaire ? 'Completa Questionario' : 'Continua Onboarding'}
+                    </span>
+                  </div>
+                  <ChevronRight className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                </button>
+              )}
+              
+              {/* Impostazioni - solo se onboarding completato */}
+              {isOnboardingCompleted && (
+                <>
+                  <button className="w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <div className="flex items-center space-x-2">
+                      <Settings className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                      <span className="text-gray-900 dark:text-white text-xs">Impostazioni</span>
+                    </div>
+                  </button>
+                  
+                  <button className="w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                    <div className="flex items-center space-x-2">
+                      <Shield className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                      <span className="text-gray-900 dark:text-white text-xs">Privacy</span>
+                    </div>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Exercise History */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-2">
-              <History className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Storico Esercizi
-              </h3>
+        {/* Profilo Sportivo - Solo se onboarding completato */}
+        {userProfile?.initialQuestionnaire && isOnboardingCompleted && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-1.5 rounded-lg">
+                <Trophy className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Profilo Sportivo
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Dal tuo questionario
+                </p>
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              {/* Sport e Livello sulla stessa riga */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
+                  <div className="flex items-center space-x-1 mb-0.5">
+                    <Trophy className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+                    <h4 className="font-medium text-gray-900 dark:text-white text-xs">Sport</h4>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 text-xs">
+                    {userProfile.initialQuestionnaire.sport || 'Non specificato'}
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
+                  <div className="flex items-center space-x-1 mb-0.5">
+                    <Star className="h-3 w-3 text-yellow-600 dark:text-yellow-400" />
+                    <h4 className="font-medium text-gray-900 dark:text-white text-xs">Livello</h4>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 text-xs">
+                    {userProfile.initialQuestionnaire.level || 'Non specificato'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Coaching e Tempo sulla stessa riga */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
+                  <div className="flex items-center space-x-1 mb-0.5">
+                    <Brain className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                    <h4 className="font-medium text-gray-900 dark:text-white text-xs">Coaching</h4>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 text-xs">
+                    {userProfile.initialQuestionnaire.coachingExperience || 'Non specificato'}
+                  </p>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
+                  <div className="flex items-center space-x-1 mb-0.5">
+                    <Clock className="h-3 w-3 text-green-600 dark:text-green-400" />
+                    <h4 className="font-medium text-gray-900 dark:text-white text-xs">Tempo</h4>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300 text-xs">
+                    {userProfile.initialQuestionnaire.timeAvailable || 'Non specificato'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Obiettivi Mentali */}
+            {userProfile.initialQuestionnaire.mentalGoals && userProfile.initialQuestionnaire.mentalGoals.length > 0 && (
+              <div className="mt-3">
+                <div className="flex items-center space-x-1 mb-2">
+                  <Target className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <h4 className="font-medium text-gray-900 dark:text-white text-xs">I Miei Obiettivi Mentali</h4>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {userProfile.initialQuestionnaire.mentalGoals.map((goal, index) => (
+                    <span 
+                      key={index}
+                      className="px-2 py-0.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs rounded-full"
+                    >
+                      {goal}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Data Completamento */}
+            {userProfile.initialQuestionnaire.completedAt && (
+              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Profilo completato il {userProfile.initialQuestionnaire.completedAt.toDate ? 
+                    userProfile.initialQuestionnaire.completedAt.toDate().toLocaleDateString('it-IT') :
+                    new Date(userProfile.initialQuestionnaire.completedAt).toLocaleDateString('it-IT')
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Exercise History - Sempre visibile */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-1.5">
+                <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  Storico Esercizi
+                </h3>
+              </div>
             {exerciseHistory.length > 0 && (
               <button
                 onClick={() => setShowFullHistory(!showFullHistory)}
-                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium"
+                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-xs font-medium"
               >
-                {showFullHistory ? 'Mostra meno' : `Vedi tutti (${exerciseHistory.length})`}
+                {showFullHistory ? 'Meno' : `Tutti (${exerciseHistory.length})`}
               </button>
             )}
           </div>
 
           {exerciseHistory.length === 0 ? (
-            <div className="text-center py-8">
-              <Brain className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-              <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            <div className="text-center py-6">
+              <Brain className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+              <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
                 Nessun esercizio completato
               </h4>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                 Inizia il tuo primo esercizio per vedere qui lo storico
               </p>
               <button
                 onClick={() => navigate('/exercises')}
-                className="inline-flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+                className="inline-flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors text-xs"
               >
-                <BookOpen className="h-4 w-4" />
+                <BookOpen className="h-3 w-3" />
                 <span>Vai agli Esercizi</span>
               </button>
             </div>
           ) : (
             <>
-              <div className="space-y-3">
-                {(showFullHistory ? exerciseHistory : exerciseHistory.slice(0, 5)).map((session) => (
+              <div className="space-y-2">
+                {(showFullHistory ? exerciseHistory : exerciseHistory.slice(0, 3)).map((session) => (
                   <div
                     key={session.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
                   >
                     <div 
-                      className="flex items-center space-x-3 flex-1 cursor-pointer"
+                      className="flex items-center space-x-2 flex-1 cursor-pointer min-w-0"
                       onClick={() => handleExerciseClick(session)}
                     >
-                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                        <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center flex-shrink-0">
+                        <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                       </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
                           {session.exerciseTitle || 'Esercizio'}
                         </h4>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3" />
+                        <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center space-x-0.5">
+                            <Calendar className="h-2.5 w-2.5" />
                             <span>
                               {session.completedAt.toLocaleDateString('it-IT', {
                                 day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric'
-                              })}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3" />
-                            <span>
-                              {session.completedAt.toLocaleTimeString('it-IT', {
-                                hour: '2-digit',
-                                minute: '2-digit'
+                                month: '2-digit'
                               })}
                             </span>
                           </div>
                           {session.timeSpent && (
-                            <div className="flex items-center space-x-1">
-                              <Target className="h-3 w-3" />
+                            <div className="flex items-center space-x-0.5">
+                              <Clock className="h-2.5 w-2.5" />
                               <span>
-                                {Math.round(session.timeSpent / 60)} min
+                                {Math.round(session.timeSpent / 60)}m
                               </span>
                             </div>
                           )}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {Object.keys(session.responses || {}).length} risposte • Clicca per visualizzare
+                          <span className="text-xs">
+                            • {Object.keys(session.responses || {}).length} risposte
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1 flex-shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleExerciseClick(session);
                         }}
-                        className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                         title="Visualizza risposte"
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           downloadSingleExercisePDF(session);
                         }}
-                        className="p-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                        className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20 rounded-lg transition-colors"
                         title="Scarica PDF"
                       >
-                        <FileText className="h-4 w-4" />
+                        <FileText className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   </div>
@@ -764,15 +910,15 @@ const ProfilePage = () => {
               </div>
 
               {/* PDF Export Button */}
-              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
                 <button
                   onClick={exportToPDF}
-                  className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors text-xs"
                 >
-                  <Download className="h-4 w-4" />
+                  <Download className="h-3 w-3" />
                   <span>Esporta Storico PDF</span>
                 </button>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   Scarica un report completo del tuo storico esercizi
                 </p>
               </div>
@@ -780,17 +926,17 @@ const ProfilePage = () => {
           )}
         </div>
 
-        {/* Logout Button */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+        {/* Logout Button - Mobile ottimizzato */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center space-x-3 p-4 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium"
+            className="w-full flex items-center justify-center space-x-1 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium text-xs"
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-3.5 w-3.5" />
             <span>Logout</span>
           </button>
           
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-3">
+          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-1">
             Verrai reindirizzato alla pagina di accesso
           </p>
         </div>

@@ -24,6 +24,7 @@ import {
   Monitor
 } from 'lucide-react';
 import VideoSelector from '../VideoSelector';
+import VideoDropdown from '../VideoDropdown';
 
 const WelcomePageManager = () => {
   const [welcomeData, setWelcomeData] = useState({
@@ -270,13 +271,21 @@ const WelcomePageManager = () => {
             />
           </div>
 
-          <VideoSelector
-            value={welcomeData.selectedVideo}
-            onChange={(video) => updateField('selectedVideo', video)}
-            label="Video Introduttivo"
-            placeholder="Seleziona un video dalla libreria..."
-            multiple={false}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Video Introduttivo
+            </label>
+            <VideoDropdown
+              selectedVideo={welcomeData.selectedVideo}
+              onVideoSelect={(video) => updateField('selectedVideo', video)}
+              placeholder="Seleziona qualsiasi video..."
+              filterTags={null}
+              showPreview={true}
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Mostra TUTTI i video disponibili nell'app
+            </p>
+          </div>
         </div>
 
         {/* Design Settings */}

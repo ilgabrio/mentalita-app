@@ -15,14 +15,18 @@ import {
   Settings,
   FileText,
   Crown,
-  ArrowLeft
+  ArrowLeft,
+  CreditCard,
+  Book,
+  GraduationCap
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 // Import admin components (these will be created next)
 import ExerciseManager from './content/ExerciseManager';
 import ArticleManager from './content/ArticleManager';
-import VideoManager from './content/VideoManager';
+import VideoManager from './VideoManager';
+import YouTubeVideoManager from './content/YouTubeVideoManager';
 import AudioManager from './content/AudioManager';
 import NewsManager from './content/NewsManager';
 import MotivationalTipsManager from './motivation/MotivationalTipsManager';
@@ -39,6 +43,12 @@ import SiteSettingsManager from './settings/SiteSettingsManager';
 import QuestionnaireTemplatesManager from './settings/QuestionnaireTemplatesManager';
 import WelcomePageManager from './settings/WelcomePageManager';
 import OnboardingSettingsManager from './settings/OnboardingSettingsManager';
+import StripeSettingsManager from './settings/StripeSettingsManager';
+import UserManager from './UserManager';
+import VideoDebugPage from './VideoDebugPage';
+import OnboardingExercisesCategorizer from './OnboardingExercisesCategorizer';
+import EbookManager from './content/EbookManager';
+import CourseManager from './content/CourseManager';
 
 const AdminDashboard = () => {
   const { userProfile, isAdmin } = useAuth();
@@ -70,8 +80,11 @@ const AdminDashboard = () => {
       items: [
         { id: 'exercises', name: 'Esercizi', icon: Trophy },
         { id: 'articles', name: 'Articoli', icon: FileText },
-        { id: 'videos', name: 'Video', icon: Play },
+        { id: 'videos', name: 'Video (Legacy)', icon: Play },
+        { id: 'youtube-videos', name: 'Video YouTube', icon: Play },
         { id: 'audio', name: 'Audio', icon: Volume2 },
+        { id: 'ebooks', name: 'Ebook', icon: Book },
+        { id: 'courses', name: 'Corsi', icon: GraduationCap },
         { id: 'news', name: 'News', icon: Newspaper },
       ]
     },
@@ -111,6 +124,15 @@ const AdminDashboard = () => {
         { id: 'premium-requests', name: 'Richieste Premium', icon: Crown },
         { id: 'payment-sessions', name: 'Sessioni Pagamento', icon: DollarSign },
         { id: 'premium-plans', name: 'Piani Premium', icon: Star },
+        { id: 'stripe-settings', name: 'Configurazione Stripe', icon: CreditCard },
+      ]
+    },
+    {
+      id: 'users',
+      name: 'Gestione Utenti',
+      icon: Users,
+      items: [
+        { id: 'user-management', name: 'Utenti Registrati', icon: Users },
       ]
     },
     {
@@ -122,6 +144,8 @@ const AdminDashboard = () => {
         { id: 'onboarding-flow', name: 'Flusso Onboarding', icon: BookOpen },
         { id: 'questionnaires', name: 'Questionari', icon: FileText },
         { id: 'welcome-page', name: 'Welcome Page', icon: Star },
+        { id: 'video-debug', name: '🔍 Debug Video', icon: Play },
+        { id: 'onboarding-categorizer', name: '🏷️ Categorizza Onboarding', icon: Trophy },
       ]
     }
   ];
@@ -134,8 +158,14 @@ const AdminDashboard = () => {
         return <ArticleManager />;
       case 'videos':
         return <VideoManager />;
+      case 'youtube-videos':
+        return <YouTubeVideoManager />;
       case 'audio':
         return <AudioManager />;
+      case 'ebooks':
+        return <EbookManager />;
+      case 'courses':
+        return <CourseManager />;
       case 'news':
         return <NewsManager />;
       case 'tips':
@@ -158,6 +188,8 @@ const AdminDashboard = () => {
         return <PaymentSessionsView />;
       case 'premium-plans':
         return <PremiumPlansManager />;
+      case 'stripe-settings':
+        return <StripeSettingsManager />;
       case 'site-settings':
         return <SiteSettingsManager />;
       case 'onboarding-flow':
@@ -166,6 +198,12 @@ const AdminDashboard = () => {
         return <QuestionnaireTemplatesManager />;
       case 'welcome-page':
         return <WelcomePageManager />;
+      case 'video-debug':
+        return <VideoDebugPage />;
+      case 'onboarding-categorizer':
+        return <OnboardingExercisesCategorizer />;
+      case 'user-management':
+        return <UserManager />;
       default:
         return (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
