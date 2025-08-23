@@ -173,12 +173,12 @@ const ExercisePracticePage = () => {
       // If coming from onboarding, redirect back with completion status
       if (fromOnboarding && onboardingDay !== null) {
         setTimeout(() => {
-          navigate(`/onboarding?completed=true&day=${onboardingDay}`);
+          navigate(`/onboarding-exercises`);
         }, 1500);
       } else {
-        // For regular exercises, redirect to exercises page after a short delay
+        // For regular exercises, redirect to exercise intro page after a short delay
         setTimeout(() => {
-          navigate('/exercises');
+          navigate(`/exercise-intro/${id}`);
         }, 2000);
       }
       
@@ -435,7 +435,7 @@ const ExercisePracticePage = () => {
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Esercizio non trovato</h2>
           <button
-            onClick={() => navigate(fromOnboarding ? '/onboarding' : '/exercises')}
+            onClick={() => navigate(fromOnboarding ? '/onboarding-exercises' : '/exercises')}
             className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
             {fromOnboarding ? 'Torna al Percorso' : 'Torna agli esercizi'}
@@ -454,7 +454,7 @@ const ExercisePracticePage = () => {
         <div className="px-4 py-4 flex items-center justify-between">
           <div className="flex items-center">
             <button
-              onClick={() => navigate(fromOnboarding ? '/onboarding' : `/exercises/${id}`)}
+              onClick={() => navigate(fromOnboarding ? '/onboarding-exercises' : `/exercise-intro/${id}`)}
               className="mr-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <ArrowLeft className="h-6 w-6 text-gray-600 dark:text-gray-300" />
@@ -504,6 +504,37 @@ const ExercisePracticePage = () => {
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-6">
             {exercise.description}
           </p>
+
+          {/* Audio Spiegazione */}
+          {exercise.audioExplanation && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-6">
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-blue-800 dark:text-blue-200 mb-3 flex items-center justify-center">
+                  <Music className="h-5 w-5 mr-2" />
+                  Senti la spiegazione dell'esercizio in breve
+                </h3>
+                {exercise.audioExplanation.audioUrl ? (
+                  <audio 
+                    controls 
+                    className="w-full max-w-md mx-auto"
+                    preload="metadata"
+                  >
+                    <source src={exercise.audioExplanation.audioUrl} type="audio/mpeg" />
+                    <source src={exercise.audioExplanation.audioUrl} type="audio/wav" />
+                    <source src={exercise.audioExplanation.audioUrl} type="audio/ogg" />
+                    Il tuo browser non supporta l'elemento audio.
+                  </audio>
+                ) : (
+                  <p className="text-sm text-blue-600 dark:text-blue-300">
+                    Audio non disponibile
+                  </p>
+                )}
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                  {exercise.audioExplanation.title}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Form degli elementi */}
@@ -555,7 +586,7 @@ const ExercisePracticePage = () => {
               Questo esercizio non ha elementi configurati per la pratica.
             </p>
             <button
-              onClick={() => navigate(fromOnboarding ? '/onboarding' : `/exercises/${id}`)}
+              onClick={() => navigate(fromOnboarding ? '/onboarding-exercises' : `/exercise-intro/${id}`)}
               className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
             >
               {fromOnboarding ? 'Torna al Percorso' : 'Torna al Dettaglio'}

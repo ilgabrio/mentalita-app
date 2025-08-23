@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAithgtbd5trXl6dLvpO0WWN_ESoQGoy9c",
@@ -24,6 +25,9 @@ export const db = getFirestore(app);
 
 // Initialize Storage
 export const storage = getStorage(app);
+
+// Initialize Functions
+export const functions = getFunctions(app);
 
 // Error handling for mobile networks
 window.addEventListener('online', () => {

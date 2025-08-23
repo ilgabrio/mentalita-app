@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Refresh - Mentalità</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+        }
+        h1 {
+            margin-bottom: 1rem;
+        }
+        button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            margin: 0.5rem;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        .status {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Aggiornamento App</h1>
+        <p>Clicca per forzare l'aggiornamento dell'app alla versione più recente</p>
+        
+        <button onclick="clearCache()">🧹 Pulisci Cache</button>
+        <button onclick="unregisterSW()">🔧 Reset Service Worker</button>
+        <button onclick="goToApp()">🚀 Vai all'App</button>
+        
+        <div class="status" id="status">
+            Pronto per l'aggiornamento
+        </div>
+    </div>
+
+    <script>
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        async function clearCache() {
+            updateStatus('Pulizia cache in corso...');
+            
+            if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                await Promise.all(
+                    cacheNames.map(cacheName => {
+                        console.log('Deleting cache:', cacheName);
+                        return caches.delete(cacheName);
+                    })
+                );
+                updateStatus('✅ Cache pulita con successo!');
+            } else {
+                updateStatus('⚠️ Cache API non disponibile');
+            }
+        }
+
+        async function unregisterSW() {
+            updateStatus('Reset Service Worker in corso...');
+            
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                    console.log('Service Worker unregistered');
+                }
+                updateStatus('✅ Service Worker resettato!');
+            } else {
+                updateStatus('⚠️ Service Worker non disponibile');
+            }
+        }
+
+        function goToApp() {
+            // Aggiunge un timestamp per forzare il reload
+            window.location.href = '/?refresh=' + Date.now();
+        }
+
+        // Auto-refresh dopo 2 secondi
+        window.addEventListener('load', async () => {
+            await clearCache();
+            await unregisterSW();
+            setTimeout(() => {
+                updateStatus('🚀 Reindirizzamento all\'app aggiornata...');
+                goToApp();
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

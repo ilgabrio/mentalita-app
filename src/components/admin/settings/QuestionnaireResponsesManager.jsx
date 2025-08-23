@@ -83,20 +83,30 @@ const QuestionnaireResponsesManager = () => {
         updatedAt: new Date()
       });
       
-      // Also update user profile if approved
+      // Also update user profile if approved (NUOVO FLUSSO: non attiva Premium direttamente)
       if (newStatus === 'approved') {
         const response = responses.find(r => r.id === responseId);
         if (response && response.userId) {
           await updateDoc(doc(db, 'users', response.userId), {
-            isPremium: true,
+            premiumRequestStatus: 'approved_pending_payment', // In attesa di pagamento
             premiumApprovedAt: new Date(),
-            premiumRequestStatus: 'approved'
+            premiumApprovedBy: 'admin_questionnaire'
+          });
+          
+          // Aggiorna anche la richiesta premium con paymentPending
+          await updateDoc(doc(db, 'premiumRequests', responseId), {
+            paymentPending: true,
+            approvedBy: 'admin_questionnaire'
           });
         }
       }
       
       fetchResponses();
-      alert('Status aggiornato con successo!');
+      if (newStatus === 'approved') {
+        alert('✅ Richiesta approvata!\n\n💡 L\'utente riceverà una notifica in home page per completare il pagamento Premium tramite Stripe.\n\n📧 Considera di inviare anche un\'email di notifica dalla sezione Premium Requests.');
+      } else {
+        alert('Status aggiornato con successo!');
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       alert('Errore nell\'aggiornamento');

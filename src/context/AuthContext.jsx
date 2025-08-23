@@ -137,6 +137,14 @@ export const AuthProvider = ({ children }) => {
           localStorage.removeItem('onboardingCompleted');
         }
         
+        // Check if user has champion badge and sync with localStorage
+        if (profile.championBadge?.unlocked === true) {
+          localStorage.setItem('championBadge', 'true');
+          console.log('🏆 Badge Campione ripristinato dal database');
+        } else {
+          localStorage.removeItem('championBadge');
+        }
+        
         return profile;
       }
     } catch (error) {

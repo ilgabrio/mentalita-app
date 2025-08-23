@@ -19,6 +19,8 @@ import { db } from '../config/firebase';
 import { 
   doc, 
   updateDoc,
+  addDoc,
+  collection,
   serverTimestamp
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -190,19 +192,31 @@ const InitialQuestionnairePage = () => {
         updatedAt: serverTimestamp()
       });
 
+      // Salva anche nella collezione questionnaires per il profilo utente
+      await addDoc(collection(db, 'questionnaires'), {
+        userId: currentUser.uid,
+        type: 'initial',
+        title: 'Questionario Iniziale',
+        responses: answers,
+        completedAt: new Date(),
+        metadata: {
+          submittedFrom: 'initial_questionnaire_page'
+        }
+      });
+
       // Salva nel localStorage per il controllo lato client
       localStorage.setItem('initialQuestionnaireCompleted', 'true');
 
       console.log('✅ Questionario iniziale completato e salvato');
       
-      // Redirect al primo passo dell'onboarding
-      navigate('/onboarding');
+      // Redirect alla pagina di benvenuto
+      navigate('/welcome');
       
     } catch (error) {
       console.error('Errore nel salvare il questionario:', error);
       // Continua comunque per non bloccare l'utente
       localStorage.setItem('initialQuestionnaireCompleted', 'true');
-      navigate('/onboarding');
+      navigate('/welcome');
     } finally {
       setLoading(false);
     }

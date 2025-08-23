@@ -30,7 +30,9 @@ import {
   Star,
   Calendar,
   Users,
-  Settings
+  Settings,
+  Send,
+  CheckCircle
 } from 'lucide-react';
 import QuestionnaireResponsesManager from './QuestionnaireResponsesManager';
 
@@ -44,6 +46,11 @@ const QuestionnaireTemplatesManager = () => {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [formData, setFormData] = useState({});
   const [saveLoading, setSaveLoading] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigningTemplate, setAssigningTemplate] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [assignLoading, setAssignLoading] = useState(false);
 
   const categories = [
     'Valutazione Iniziale',
@@ -73,6 +80,7 @@ const QuestionnaireTemplatesManager = () => {
 
   useEffect(() => {
     fetchTemplates();
+    fetchUsers();
   }, []);
 
   const fetchTemplates = async () => {
@@ -205,6 +213,65 @@ const QuestionnaireTemplatesManager = () => {
     } catch (error) {
       console.error('Error duplicating template:', error);
       alert('Errore nella duplicazione');
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const usersQuery = query(collection(db, 'users'));
+      const snapshot = await getDocs(usersQuery);
+      const usersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })).filter(user => !user.isAdmin); // Exclude admin users
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const handleAssign = (template) => {
+    setAssigningTemplate(template);
+    setSelectedUsers([]);
+    setShowAssignModal(true);
+  };
+
+  const handleAssignSubmit = async () => {
+    if (selectedUsers.length === 0) {
+      alert('Seleziona almeno un atleta');
+      return;
+    }
+
+    try {
+      setAssignLoading(true);
+      
+      // Create assignment records for each selected user
+      const assignments = selectedUsers.map(userId => ({
+        templateId: assigningTemplate.id,
+        templateTitle: assigningTemplate.title,
+        userId: userId,
+        assignedAt: new Date(),
+        status: 'assigned', // assigned, completed, expired
+        dueDate: null, // Can be extended later
+        assignedBy: 'admin' // Could be dynamic
+      }));
+
+      // Save all assignments
+      await Promise.all(
+        assignments.map(assignment => 
+          addDoc(collection(db, 'questionnaireAssignments'), assignment)
+        )
+      );
+
+      alert(`Questionario assegnato a ${selectedUsers.length} atleti`);
+      setShowAssignModal(false);
+      setAssigningTemplate(null);
+      setSelectedUsers([]);
+    } catch (error) {
+      console.error('Error assigning questionnaire:', error);
+      alert('Errore nell\'assegnazione');
+    } finally {
+      setAssignLoading(false);
     }
   };
 
@@ -429,13 +496,20 @@ const QuestionnaireTemplatesManager = () => {
               )}
 
               {/* Actions */}
-              <div className="flex space-x-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => handleEdit(template)}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 rounded transition-colors"
+                  className="flex items-center justify-center space-x-1 px-3 py-2 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100 rounded transition-colors"
                 >
                   <Edit3 className="h-4 w-4" />
                   <span className="text-sm">Modifica</span>
+                </button>
+                <button
+                  onClick={() => handleAssign(template)}
+                  className="flex items-center justify-center space-x-1 px-3 py-2 text-green-600 hover:text-green-800 hover:bg-green-100 rounded transition-colors"
+                >
+                  <Send className="h-4 w-4" />
+                  <span className="text-sm">Assegna</span>
                 </button>
                 <button
                   onClick={() => handleDuplicate(template)}
@@ -671,6 +745,107 @@ const QuestionnaireTemplatesManager = () => {
                 >
                   <Save className="h-4 w-4" />
                   <span>{saveLoading ? 'Salvataggio...' : 'Salva'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assignment Modal */}
+      {showAssignModal && assigningTemplate && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white dark:bg-gray-800">
+            <div className="mt-3">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  Assegna Questionario: {assigningTemplate.title}
+                </h3>
+                <button
+                  onClick={() => setShowAssignModal(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Users List */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  Seleziona gli atleti a cui assegnare il questionario:
+                </label>
+                <div className="max-h-64 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg">
+                  {users.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                      Nessun atleta trovato
+                    </div>
+                  ) : (
+                    <div className="p-2 space-y-2">
+                      {users.map(user => (
+                        <label
+                          key={user.id}
+                          className="flex items-center space-x-3 p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedUsers.includes(user.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedUsers(prev => [...prev, user.id]);
+                              } else {
+                                setSelectedUsers(prev => prev.filter(id => id !== user.id));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">
+                              {user.displayName || user.name || 'Nome non disponibile'}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {user.email}
+                            </div>
+                          </div>
+                          {user.isPremium && (
+                            <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded-full">
+                              Premium
+                            </span>
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selected Users Count */}
+              {selectedUsers.length > 0 && (
+                <div className="mb-4 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-sm text-indigo-800 dark:text-indigo-300">
+                      {selectedUsers.length} atleti selezionati
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setShowAssignModal(false)}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  onClick={handleAssignSubmit}
+                  disabled={assignLoading || selectedUsers.length === 0}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Send className="h-4 w-4" />
+                  <span>{assignLoading ? 'Assegnazione...' : 'Assegna Questionario'}</span>
                 </button>
               </div>
             </div>

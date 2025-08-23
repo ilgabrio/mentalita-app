@@ -23,7 +23,9 @@ import {
   ChevronRight,
   Sparkles,
   MessageCircle,
-  Trophy
+  Trophy,
+  ClipboardList,
+  RefreshCw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -41,7 +43,36 @@ const ProfilePage = () => {
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [exerciseDetails, setExerciseDetails] = useState({});
+  const [questionnaires, setQuestionnaires] = useState([]);
+  const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
+  const [selectedQuestionnaire, setSelectedQuestionnaire] = useState(null);
   const navigate = useNavigate();
+
+  // Helper function to safely format dates
+  const formatDate = (dateValue, options = { day: '2-digit', month: '2-digit', year: '2-digit' }) => {
+    if (!dateValue) return 'N/A';
+    
+    let date;
+    if (dateValue.toDate) {
+      // Firebase Timestamp
+      date = dateValue.toDate();
+    } else if (dateValue instanceof Date) {
+      // Already a Date object
+      date = dateValue;
+    } else if (typeof dateValue === 'string' || typeof dateValue === 'number') {
+      // String or number timestamp
+      date = new Date(dateValue);
+    } else {
+      return 'N/A';
+    }
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return 'N/A';
+    }
+    
+    return date.toLocaleDateString('it-IT', options);
+  };
 
   // Controlla se l'utente ha completato l'onboarding
   const isOnboardingCompleted = userProfile?.onboardingCompleted === true || 
@@ -92,6 +123,27 @@ const ProfilePage = () => {
           };
         });
         setExerciseHistory(exerciseData);
+
+        // Get user questionnaires
+        const questionnairesQuery = query(
+          collection(db, 'questionnaires'),
+          where('userId', '==', currentUser.uid),
+          orderBy('completedAt', 'desc')
+        );
+        const questionnairesSnapshot = await getDocs(questionnairesQuery);
+        const questionnaireData = questionnairesSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            type: data.type,
+            title: data.title || (data.type === 'initial' ? 'Questionario Iniziale' : data.type === 'premium' ? 'Questionario Premium' : 'Questionario Personalizzato'),
+            completedAt: data.completedAt?.toDate ? data.completedAt.toDate() : new Date(data.completedAt),
+            responses: data.responses || data.answers,
+            templateId: data.templateId,
+            ...data
+          };
+        });
+        setQuestionnaires(questionnaireData);
       } catch (error) {
         console.error('Error fetching user data:', error);
       } finally {
@@ -109,6 +161,22 @@ const ProfilePage = () => {
     } catch (error) {
       console.error('Errore durante il logout:', error);
     }
+  };
+
+  const handleQuestionnaireRetake = (questionnaire) => {
+    if (questionnaire.type === 'initial') {
+      navigate('/questionnaire/initial');
+    } else if (questionnaire.type === 'premium') {
+      navigate('/premium');
+    } else if (questionnaire.templateId) {
+      // Navigate to custom questionnaire - we'll implement this later
+      alert('Rifare questionari personalizzati non è ancora disponibile');
+    }
+  };
+
+  const handleQuestionnaireView = (questionnaire) => {
+    setSelectedQuestionnaire(questionnaire);
+    setShowQuestionnaireModal(true);
   };
 
   const handleExerciseClick = async (session) => {
@@ -349,7 +417,9 @@ const ProfilePage = () => {
         // Info esercizio
         pdfDoc.setFontSize(9);
         pdfDoc.setTextColor(100, 100, 100);
-        pdfDoc.text(`Completato il: ${session.completedAt.toLocaleDateString('it-IT')} alle ${session.completedAt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`, 20, currentY);
+        const sessionDate = session.completedAt?.toDate ? session.completedAt.toDate() : 
+                            (session.completedAt instanceof Date ? session.completedAt : new Date(session.completedAt));
+        pdfDoc.text(`Completato il: ${sessionDate.toLocaleDateString('it-IT')} alle ${sessionDate.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`, 20, currentY);
         currentY += 5;
         if (session.timeSpent) {
           pdfDoc.text(`Durata: ${Math.round(session.timeSpent / 60)} minuti`, 20, currentY);
@@ -794,11 +864,118 @@ const ProfilePage = () => {
             {userProfile.initialQuestionnaire.completedAt && (
               <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Profilo completato il {userProfile.initialQuestionnaire.completedAt.toDate ? 
-                    userProfile.initialQuestionnaire.completedAt.toDate().toLocaleDateString('it-IT') :
-                    new Date(userProfile.initialQuestionnaire.completedAt).toLocaleDateString('it-IT')
-                  }
+                  Profilo completato il {formatDate(userProfile.initialQuestionnaire.completedAt, { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric' 
+                  })}
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* I Miei Questionari - Solo se onboarding completato */}
+        {isOnboardingCompleted && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-3">
+            <div className="flex items-center space-x-2 mb-3">
+              <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-1.5 rounded-lg">
+                <ClipboardList className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                  I Miei Questionari
+                </h3>
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  Storico delle tue risposte
+                </p>
+              </div>
+            </div>
+
+            {questionnaires.length === 0 ? (
+              <div className="text-center py-6">
+                <ClipboardList className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                  Nessun questionario completato
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Completa il tuo primo questionario per vedere qui lo storico
+                </p>
+                <button
+                  onClick={() => navigate('/questionnaire/initial')}
+                  className="inline-flex items-center space-x-1 bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors text-xs"
+                >
+                  <ClipboardList className="h-3 w-3" />
+                  <span>Inizia Questionario</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {questionnaires.map((questionnaire) => (
+                  <div
+                    key={questionnaire.id}
+                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                  >
+                    <div 
+                      className="flex items-center space-x-2 flex-1 cursor-pointer min-w-0"
+                      onClick={() => handleQuestionnaireView(questionnaire)}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        questionnaire.type === 'initial' ? 'bg-blue-100 dark:bg-blue-900/30' :
+                        questionnaire.type === 'premium' ? 'bg-purple-100 dark:bg-purple-900/30' :
+                        'bg-green-100 dark:bg-green-900/30'
+                      }`}>
+                        <ClipboardList className={`h-4 w-4 ${
+                          questionnaire.type === 'initial' ? 'text-blue-600 dark:text-blue-400' :
+                          questionnaire.type === 'premium' ? 'text-purple-600 dark:text-purple-400' :
+                          'text-green-600 dark:text-green-400'
+                        }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate">
+                          {questionnaire.title}
+                        </h4>
+                        <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                          <div className="flex items-center space-x-0.5">
+                            <Calendar className="h-2.5 w-2.5" />
+                            <span>
+                              {formatDate(questionnaire.completedAt, {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <span className="text-xs">
+                            • {Object.keys(questionnaire.responses || {}).length} risposte
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuestionnaireView(questionnaire);
+                        }}
+                        className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                        title="Visualizza risposte"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuestionnaireRetake(questionnaire);
+                        }}
+                        className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                        title="Rifai questionario"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -863,7 +1040,7 @@ const ProfilePage = () => {
                           <div className="flex items-center space-x-0.5">
                             <Calendar className="h-2.5 w-2.5" />
                             <span>
-                              {session.completedAt.toLocaleDateString('it-IT', {
+                              {formatDate(session.completedAt, {
                                 day: '2-digit',
                                 month: '2-digit'
                               })}
@@ -941,6 +1118,148 @@ const ProfilePage = () => {
           </p>
         </div>
       </div>
+
+      {/* Modal per visualizzare questionari */}
+      {showQuestionnaireModal && selectedQuestionnaire && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header Modal */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-600">
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  {selectedQuestionnaire.title}
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  Completato il {selectedQuestionnaire.completedAt.toLocaleString('it-IT')}
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleQuestionnaireRetake(selectedQuestionnaire)}
+                  className="p-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                  title="Rifai questionario"
+                >
+                  <RefreshCw className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => setShowQuestionnaireModal(false)}
+                  className="p-2 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Content Modal */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+              {/* Tipo questionario */}
+              <div className="mb-6 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border-l-4 border-indigo-500">
+                <h4 className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 mb-2">
+                  Tipo di Questionario
+                </h4>
+                <p className="text-sm text-indigo-700 dark:text-indigo-300">
+                  {selectedQuestionnaire.type === 'initial' ? 'Questionario iniziale di valutazione del profilo mentale' :
+                   selectedQuestionnaire.type === 'premium' ? 'Questionario per la richiesta Premium' :
+                   'Questionario personalizzato assegnato dal coach'}
+                </p>
+              </div>
+
+              {/* Risposte */}
+              <div className="space-y-6">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white border-b border-gray-200 dark:border-gray-600 pb-2">
+                  Le tue Risposte
+                </h4>
+
+                {selectedQuestionnaire.responses && Object.keys(selectedQuestionnaire.responses).length > 0 ? (
+                  <div className="space-y-4">
+                    {Object.entries(selectedQuestionnaire.responses).map(([key, value], index) => {
+                      if (value === undefined || value === '' || value === null) return null;
+                      
+                      // Get readable field name based on questionnaire type
+                      const getFieldLabel = (key, type) => {
+                        if (type === 'initial') {
+                          const fieldLabels = {
+                            sport: 'Sport praticato',
+                            level: 'Livello di competizione',
+                            coachingExperience: 'Esperienza con mental coaching',
+                            timeAvailable: 'Tempo disponibile per allenamento mentale',
+                            mentalGoals: 'Obiettivi mentali principali',
+                            mainGoal: 'Obiettivo principale',
+                            strengths: 'Punti di forza mentali',
+                            weaknesses: 'Aree di miglioramento',
+                            motivation: 'Motivazione',
+                            stressManagement: 'Gestione dello stress',
+                            concentration: 'Concentrazione',
+                            confidence: 'Fiducia in se stessi'
+                          };
+                          return fieldLabels[key] || key;
+                        } else if (type === 'premium') {
+                          const fieldLabels = {
+                            budget: 'Budget mensile',
+                            coachingPreference: 'Preferenza coaching',
+                            goals: 'Obiettivi Premium',
+                            availability: 'Disponibilità oraria'
+                          };
+                          return fieldLabels[key] || key;
+                        }
+                        return key;
+                      };
+
+                      const displayValue = Array.isArray(value) ? value.join(', ') : 
+                                          typeof value === 'object' ? JSON.stringify(value) : 
+                                          String(value);
+
+                      return (
+                        <div key={key} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                          <div className="mb-3">
+                            <h5 className="font-medium text-gray-900 dark:text-white">
+                              {getFieldLabel(key, selectedQuestionnaire.type)}
+                            </h5>
+                          </div>
+                          <div className="pl-4 border-l-2 border-indigo-500">
+                            <p className="text-gray-800 dark:text-gray-200">
+                              {displayValue}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <ClipboardList className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Nessuna risposta trovata per questo questionario
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Modal */}
+            <div className="flex items-center justify-between p-6 border-t border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {Object.keys(selectedQuestionnaire.responses || {}).length} risposte totali
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => handleQuestionnaireRetake(selectedQuestionnaire)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Rifai Questionario</span>
+                </button>
+                <button
+                  onClick={() => setShowQuestionnaireModal(false)}
+                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal per visualizzare risposte dettagliate */}
       {showModal && selectedExercise && (

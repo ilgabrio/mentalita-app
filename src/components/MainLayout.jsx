@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Crown } from 'lucide-react';
+import { Moon, Sun, Crown, Bell, X } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import SideNav from './SideNav';
 import BottomNav from './BottomNav';
@@ -15,6 +15,8 @@ const MainLayout = ({ children }) => {
   const [exerciseCount, setExerciseCount] = useState(0);
   const [userBadges, setUserBadges] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [showPremiumNotification, setShowPremiumNotification] = useState(false);
+  const [premiumNotificationMessage, setPremiumNotificationMessage] = useState('');
   
   // Fetch user data to determine onboarding status
   useEffect(() => {
@@ -59,6 +61,14 @@ const MainLayout = ({ children }) => {
 
     fetchUserData();
   }, [currentUser, isAdmin]);
+
+  // Controlla notifiche Premium
+  useEffect(() => {
+    if (userProfile?.premiumNotification && !userProfile?.isPremium) {
+      setShowPremiumNotification(true);
+      setPremiumNotificationMessage(userProfile.premiumNotificationMessage || 'La tua richiesta Premium è stata approvata!');
+    }
+  }, [userProfile]);
   
   // Controlla se l'utente viene da onboarding
   const fromOnboarding = new URLSearchParams(window.location.search).get('from') === 'onboarding';
@@ -109,6 +119,38 @@ const MainLayout = ({ children }) => {
   
   // Champion non ha mai navigazione nascosta
   const hideNavigation = !isChampion && ((fromOnboarding && !isOnboardingExercisesPage) || isUserInOnboarding);
+
+  const handlePremiumNotificationClick = async () => {
+    // Rimuovi la notifica dal database
+    if (currentUser) {
+      try {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          premiumNotification: false,
+          premiumNotificationMessage: null
+        });
+      } catch (error) {
+        console.error('Error removing notification:', error);
+      }
+    }
+    setShowPremiumNotification(false);
+    // Naviga alla pagina Premium con parametro approved
+    navigate('/premium?approved=true');
+  };
+
+  const dismissPremiumNotification = async () => {
+    // Rimuovi la notifica dal database
+    if (currentUser) {
+      try {
+        await updateDoc(doc(db, 'users', currentUser.uid), {
+          premiumNotification: false,
+          premiumNotificationMessage: null
+        });
+      } catch (error) {
+        console.error('Error removing notification:', error);
+      }
+    }
+    setShowPremiumNotification(false);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
@@ -165,6 +207,28 @@ const MainLayout = ({ children }) => {
           </div>
         </div>
       </header>
+
+      {/* Premium Notification Banner */}
+      {showPremiumNotification && (
+        <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white px-4 py-3 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3 flex-1 cursor-pointer" onClick={handlePremiumNotificationClick}>
+              <Bell className="h-5 w-5 animate-pulse" />
+              <span className="font-medium">{premiumNotificationMessage}</span>
+              <Crown className="h-4 w-4" />
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                dismissPremiumNotification();
+              }}
+              className="p-1 hover:bg-amber-600 rounded transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Side Navigation - Hidden during onboarding */}
       {!hideNavigation && <SideNav />}

@@ -2,490 +2,470 @@ import React, { useState, useEffect } from 'react';
 import { 
   collection, 
   query, 
-  getDocs, 
   orderBy, 
+  getDocs,
+  doc,
   updateDoc,
   deleteDoc,
-  doc,
-  where,
-  addDoc
+  where
 } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
+import emailjs from '@emailjs/browser';
 import { 
   Crown, 
-  Search, 
-  Filter, 
-  Check, 
-  X, 
+  CheckCircle, 
+  XCircle, 
   Clock,
-  User,
   Mail,
-  Calendar,
-  Euro,
-  MoreHorizontal,
-  CheckCircle,
-  XCircle,
   Eye,
   Trash2,
-  UserPlus,
-  AlertTriangle
+  Send,
+  Settings
 } from 'lucide-react';
 
 const PremiumRequestsManager = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-
-  const statusOptions = [
-    { value: 'all', label: 'Tutti' },
-    { value: 'pending', label: 'In Attesa' },
-    { value: 'approved', label: 'Approvate' },
-    { value: 'rejected', label: 'Rifiutate' },
-    { value: 'completed', label: 'Completate' }
-  ];
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return 'text-yellow-600 bg-yellow-100';
-      case 'approved': return 'text-green-600 bg-green-100';
-      case 'rejected': return 'text-red-600 bg-red-100';
-      case 'completed': return 'text-blue-600 bg-blue-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'pending': return <Clock className="h-4 w-4" />;
-      case 'approved': return <CheckCircle className="h-4 w-4" />;
-      case 'rejected': return <XCircle className="h-4 w-4" />;
-      case 'completed': return <Crown className="h-4 w-4" />;
-      default: return <AlertTriangle className="h-4 w-4" />;
-    }
-  };
+  const [filter, setFilter] = useState('pending');
+  const [emailConfig, setEmailConfig] = useState(null);
+  const [configModalOpen, setConfigModalOpen] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     fetchRequests();
-  }, []);
+    loadEmailConfig();
+  }, [filter]);
+
+  const loadEmailConfig = () => {
+    // Prima prova dal localStorage (configurazione admin)
+    const savedConfig = localStorage.getItem('emailjs_config');
+    if (savedConfig) {
+      const config = JSON.parse(savedConfig);
+      setEmailConfig(config);
+      emailjs.init(config.publicKey);
+      return;
+    }
+    
+    // Fallback: usa le variabili d'ambiente
+    const envConfig = {
+      serviceId: import.meta.env.VITE_EMAILJS_SERVICE_ID,
+      templateId: import.meta.env.VITE_EMAILJS_PREMIUM_TEMPLATE_ID || import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+      publicKey: import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+    };
+    
+    // Verifica che le env vars siano configurate
+    if (envConfig.serviceId && envConfig.serviceId !== 'your_service_id' && 
+        envConfig.templateId && envConfig.templateId !== 'your_template_id' &&
+        envConfig.publicKey && envConfig.publicKey !== 'your_public_key') {
+      setEmailConfig(envConfig);
+      emailjs.init(envConfig.publicKey);
+    }
+  };
 
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const requestsQuery = query(
-        collection(db, 'premiumRequests'),
-        orderBy('createdAt', 'desc')
-      );
+      let q;
       
-      const snapshot = await getDocs(requestsQuery);
+      if (filter === 'all') {
+        q = query(
+          collection(db, 'premiumRequests'),
+          orderBy('createdAt', 'desc')
+        );
+      } else {
+        q = query(
+          collection(db, 'premiumRequests'),
+          where('status', '==', filter),
+          orderBy('createdAt', 'desc')
+        );
+      }
+      
+      const snapshot = await getDocs(q);
       const requestsData = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate()
+        ...doc.data()
       }));
       
       setRequests(requestsData);
     } catch (error) {
       console.error('Error fetching premium requests:', error);
-      // Fallback query without orderBy
-      try {
-        const fallbackQuery = query(collection(db, 'premiumRequests'));
-        const snapshot = await getDocs(fallbackQuery);
-        const requestsData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate()
-        }));
-        setRequests(requestsData.sort((a, b) => (b.createdAt || new Date()) - (a.createdAt || new Date())));
-      } catch (fallbackError) {
-        console.error('Fallback query failed:', fallbackError);
-        setRequests([]);
-      }
+      const snapshot = await getDocs(collection(db, 'premiumRequests'));
+      const requestsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRequests(requestsData);
     } finally {
       setLoading(false);
     }
   };
 
-  const filteredRequests = requests.filter(request => {
-    const matchesSearch = 
-      request.userEmail?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      request.planName?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || request.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  const sendApprovalEmail = async (request) => {
+    if (!emailConfig) {
+      alert('Configurazione EmailJS non trovata. Configura prima EmailJS nella sezione Newsletter.');
+      return false;
+    }
 
-  const handleUpdateStatus = async (requestId, newStatus, notes = '') => {
+    setSendingEmail(true);
     try {
-      setActionLoading(true);
-      const requestRef = doc(db, 'premiumRequests', requestId);
+      // Determina il piano da utilizzare (di default il primo piano attivo)
+      const planId = 'standard'; // Puoi personalizzarlo in base alla richiesta
       
-      await updateDoc(requestRef, {
-        status: newStatus,
-        updatedAt: new Date(),
-        adminNotes: notes
-      });
+      const templateParams = {
+        to_email: request.userEmail,
+        to_name: `Caro ${request.userEmail.split('@')[0]}`,
+        subject: '🎉 La tua richiesta Premium è stata approvata - Completa il pagamento',
+        title: 'Congratulazioni! Sei stato accettato in Mentalità Premium!',
+        content: `Ottima notizia! La tua richiesta per Mentalità Premium è stata approvata dal nostro team.
 
-      // If approved, create subscription record
-      if (newStatus === 'approved') {
-        const request = requests.find(r => r.id === requestId);
-        if (request) {
-          await addDoc(collection(db, 'subscriptions'), {
-            userId: request.userId,
-            planId: request.planId,
-            planName: request.planName,
-            billingPeriod: request.billingPeriod,
-            price: request.price,
-            status: 'active',
-            startDate: new Date(),
-            endDate: new Date(Date.now() + (request.billingPeriod === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000),
-            createdAt: new Date()
-          });
-        }
-      }
+✅ RICHIESTA APPROVATA
+Sport: ${request.sport}
+Budget: ${request.budget}
 
-      await fetchRequests();
-      setShowModal(false);
-      setSelectedRequest(null);
+🎯 PROSSIMI PASSI:
+1. Clicca sul pulsante qui sotto per accedere alla pagina di pagamento sicura
+2. Scegli il piano che preferisci (mensile o annuale)
+3. Completa il pagamento con carta di credito tramite Stripe
+4. Il tuo account verrà attivato immediatamente dopo il pagamento
+
+🏆 COSA OTTIENI:
+• Coaching personalizzato 1-a-1
+• Esercizi avanzati di mental training
+• Supporto diretto via email e chat
+• Piano di allenamento mentale su misura per il tuo sport
+• Accesso a contenuti esclusivi e masterclass
+• Reportistica dettagliata sui tuoi progressi
+
+💳 PAGAMENTO SICURO:
+I pagamenti sono gestiti da Stripe, il leader mondiale per i pagamenti online. I tuoi dati sono protetti al 100%.
+
+⏰ OFFERTA LIMITATA:
+Hai 7 giorni per completare il pagamento e attivare il tuo account Premium.`,
+        button_text: '💳 Completa Pagamento Premium',
+        button_url: `https://be-water-2eb26.web.app/premium?approved=true&plan=${planId}&email=${encodeURIComponent(request.userEmail)}`,
+        footer: 'Benvenuto nella famiglia Premium di Mentalità! 🚀'
+      };
+
+      await emailjs.send(
+        emailConfig.serviceId,
+        emailConfig.templateId,
+        templateParams
+      );
+
+      return true;
     } catch (error) {
-      console.error('Error updating request status:', error);
-      alert('Errore nell\'aggiornamento dello stato');
+      console.error('Errore invio email:', error);
+      alert('Errore nell\'invio dell\'email. Richiesta comunque approvata.');
+      return false;
     } finally {
-      setActionLoading(false);
+      setSendingEmail(false);
     }
   };
 
-  const handleDeleteRequest = async (requestId) => {
-    if (!window.confirm('Sei sicuro di voler eliminare questa richiesta?')) return;
+  const approveRequest = async (requestId) => {
+    if (!confirm('Approvare questa richiesta e inviare email con link pagamento?')) return;
     
     try {
-      setActionLoading(true);
+      // Trova la richiesta per ottenere i dati utente
+      const request = requests.find(r => r.id === requestId);
+      if (!request) {
+        alert('Richiesta non trovata!');
+        return;
+      }
+
+      // Aggiorna lo status nel database
+      await updateDoc(doc(db, 'premiumRequests', requestId), {
+        status: 'approved',
+        approvedAt: new Date(),
+        paymentPending: true, // Nuovo campo per tracciare che il pagamento è in attesa
+        approvedBy: 'admin'
+      });
+
+      // 📧 NUOVO FLUSSO: NON attiva l'utente direttamente, ma aggiorna solo lo status della richiesta
+      if (request.userId) {
+        await updateDoc(doc(db, 'users', request.userId), {
+          premiumRequestStatus: 'approved_pending_payment', // Nuovo status
+          premiumApprovedAt: new Date(),
+          premiumApprovedBy: 'admin',
+          premiumNotification: true, // 🔔 Aggiunge notifica per l'utente
+          premiumNotificationMessage: 'La tua richiesta Premium è stata approvata! Clicca qui per completare il pagamento.'
+        });
+        console.log('✅ Richiesta approvata per utente', request.userId, '- In attesa di pagamento');
+      }
+      
+      // Invia email con link pagamento
+      const emailSent = await sendApprovalEmail(request);
+      
+      if (emailSent) {
+        alert('✅ Richiesta approvata!\n📧 Email con link pagamento inviata con successo!\n\n💡 L\'utente riceverà un\'email con il link per completare il pagamento tramite Stripe.');
+      } else {
+        alert('⚠️ Richiesta approvata, ma errore nell\'invio email.\n\nL\'utente potrà comunque accedere alla pagina Premium per completare il pagamento.');
+      }
+      
+      fetchRequests();
+    } catch (error) {
+      console.error('Error approving request:', error);
+      alert('Errore nell\'approvazione della richiesta.');
+    }
+  };
+
+  const rejectRequest = async (requestId) => {
+    if (!confirm('Rifiutare questa richiesta?')) return;
+    
+    try {
+      // Trova la richiesta per ottenere i dati utente
+      const request = requests.find(r => r.id === requestId);
+      
+      await updateDoc(doc(db, 'premiumRequests', requestId), {
+        status: 'rejected',
+        rejectedAt: new Date()
+      });
+
+      // Aggiorna lo status nel profilo utente
+      if (request?.userId) {
+        await updateDoc(doc(db, 'users', request.userId), {
+          premiumRequestStatus: 'rejected',
+          premiumRejectedAt: new Date()
+        });
+      }
+      
+      fetchRequests();
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+    }
+  };
+
+  const deleteRequest = async (requestId) => {
+    if (!confirm('Eliminare questa richiesta?')) return;
+    
+    try {
       await deleteDoc(doc(db, 'premiumRequests', requestId));
-      await fetchRequests();
-      setShowModal(false);
-      setSelectedRequest(null);
+      fetchRequests();
     } catch (error) {
       console.error('Error deleting request:', error);
-      alert('Errore nell\'eliminazione della richiesta');
-    } finally {
-      setActionLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'pending':
+        return (
+          <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium flex items-center space-x-1">
+            <Clock className="h-3 w-3" />
+            <span>In Attesa</span>
+          </span>
+        );
+      case 'approved':
+        return (
+          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium flex items-center space-x-1">
+            <CheckCircle className="h-3 w-3" />
+            <span>Approvato</span>
+          </span>
+        );
+      case 'rejected':
+        return (
+          <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium flex items-center space-x-1">
+            <XCircle className="h-3 w-3" />
+            <span>Rifiutato</span>
+          </span>
+        );
+      default:
+        return null;
     }
   };
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <div className="flex items-center space-x-3 mb-6">
-          <Crown className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Richieste Premium
-          </h2>
-        </div>
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="text-gray-500 dark:text-gray-400 mt-4">Caricamento richieste...</p>
-        </div>
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-6">
-        <div className="flex items-center space-x-3 mb-4 lg:mb-0">
-          <Crown className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Richieste Premium ({filteredRequests.length})
-          </h2>
+    <div className="p-6">
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-2">
+              <Crown className="h-8 w-8 text-yellow-500" />
+              <span>Richieste Premium</span>
+            </h2>
+            <div className="flex items-center space-x-2 mt-1">
+              <Mail className={`h-4 w-4 ${emailConfig ? 'text-green-500' : 'text-red-500'}`} />
+              <span className="text-sm text-gray-600">
+                Email: {emailConfig ? 'Configurato' : 'Non configurato'}
+              </span>
+              {!emailConfig && (
+                <button
+                  onClick={() => alert('Vai nella sezione Newsletter per configurare EmailJS')}
+                  className="text-blue-600 hover:text-blue-800 text-xs underline"
+                >
+                  Configura ora
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setFilter('pending')}
+              className={`px-4 py-2 rounded-lg font-medium ${
+                filter === 'pending'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              In Attesa
+            </button>
+            <button
+              onClick={() => setFilter('approved')}
+              className={`px-4 py-2 rounded-lg font-medium ${
+                filter === 'approved'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              Approvate
+            </button>
+            <button
+              onClick={() => setFilter('rejected')}
+              className={`px-4 py-2 rounded-lg font-medium ${
+                filter === 'rejected'
+                  ? 'bg-red-100 text-red-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              Rifiutate
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Cerca per email o piano..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent w-full"
-          />
-        </div>
-        
-        <div className="relative">
-          <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="pl-10 pr-8 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent appearance-none cursor-pointer min-w-48"
-          >
-            {statusOptions.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Requests List */}
-      {filteredRequests.length === 0 ? (
-        <div className="text-center py-12">
-          <Crown className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            Nessuna richiesta trovata
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400">
-            {searchTerm || statusFilter !== 'all' 
-              ? 'Prova a modificare i filtri di ricerca'
-              : 'Non ci sono ancora richieste premium'
-            }
-          </p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Utente
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Piano
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Prezzo
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Stato
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Data
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                  Azioni
-                </th>
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Utente
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Sport
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Budget
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Stato
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Azioni
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {requests.map(request => (
+              <tr key={request.id}>
+                <td className="px-6 py-4">
+                  <div className="text-sm font-medium text-gray-900">
+                    {request.userEmail}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-900">
+                  {request.sport}
+                </td>
+                <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                  {request.budget || 'Non specificato'}
+                </td>
+                <td className="px-6 py-4">
+                  {getStatusBadge(request.status)}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => setSelectedRequest(request)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      <Eye className="h-5 w-5" />
+                    </button>
+                    
+                    {request.status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => approveRequest(request.id)}
+                          disabled={sendingEmail}
+                          className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                          title="Approva e invia email con link pagamento"
+                        >
+                          {sendingEmail ? (
+                            <Send className="h-5 w-5 animate-pulse" />
+                          ) : (
+                            <CheckCircle className="h-5 w-5" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => rejectRequest(request.id)}
+                          disabled={sendingEmail}
+                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                        >
+                          <XCircle className="h-5 w-5" />
+                        </button>
+                      </>
+                    )}
+                    
+                    <button
+                      onClick={() => deleteRequest(request.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredRequests.map(request => (
-                <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <User className="h-8 w-8 text-gray-400 mr-3" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {request.userEmail}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          ID: {request.userId?.slice(0, 8)}...
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {request.planName}
-                    </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      {request.billingPeriod === 'monthly' ? 'Mensile' : 'Annuale'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <Euro className="h-4 w-4 text-gray-400 mr-1" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                        {request.price}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
-                      {getStatusIcon(request.status)}
-                      <span>{statusOptions.find(s => s.value === request.status)?.label || request.status}</span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 mr-1" />
-                      {request.createdAt ? request.createdAt.toLocaleDateString('it-IT') : 'N/A'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => {
-                        setSelectedRequest(request);
-                        setShowModal(true);
-                      }}
-                      className="text-orange-600 hover:text-orange-900 dark:text-orange-400 dark:hover:text-orange-300"
-                    >
-                      <MoreHorizontal className="h-5 w-5" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {/* Request Detail Modal */}
-      {showModal && selectedRequest && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white dark:bg-gray-800">
-            <div className="mt-3">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                  Dettagli Richiesta Premium
-                </h3>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                  <X className="h-6 w-6" />
-                </button>
+      {selectedRequest && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-start mb-6">
+              <h3 className="text-xl font-bold">Dettagli Richiesta</h3>
+              <button
+                onClick={() => setSelectedRequest(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-500">Utente</label>
+                <p className="text-lg">{selectedRequest.userEmail}</p>
               </div>
-
-              {/* Request Details */}
-              <div className="space-y-4 mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Email Utente
-                    </label>
-                    <div className="flex items-center">
-                      <Mail className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-gray-900 dark:text-white">{selectedRequest.userEmail}</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      ID Utente
-                    </label>
-                    <div className="flex items-center">
-                      <User className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-gray-900 dark:text-white font-mono text-sm">
-                        {selectedRequest.userId}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Piano Richiesto
-                    </label>
-                    <div className="flex items-center">
-                      <Crown className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-gray-900 dark:text-white">{selectedRequest.planName}</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Periodo di Fatturazione
-                    </label>
-                    <span className="text-gray-900 dark:text-white">
-                      {selectedRequest.billingPeriod === 'monthly' ? 'Mensile' : 'Annuale'}
-                    </span>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Prezzo
-                    </label>
-                    <div className="flex items-center">
-                      <Euro className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-gray-900 dark:text-white">€{selectedRequest.price}</span>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Data Richiesta
-                    </label>
-                    <div className="flex items-center">
-                      <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-gray-900 dark:text-white">
-                        {selectedRequest.createdAt ? selectedRequest.createdAt.toLocaleString('it-IT') : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
+              
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Stato Attuale
-                  </label>
-                  <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedRequest.status)}`}>
-                    {getStatusIcon(selectedRequest.status)}
-                    <span>{statusOptions.find(s => s.value === selectedRequest.status)?.label || selectedRequest.status}</span>
-                  </span>
+                  <label className="text-sm font-medium text-gray-500">Sport</label>
+                  <p>{selectedRequest.sport}</p>
                 </div>
-
-                {selectedRequest.adminNotes && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Note Admin
-                    </label>
-                    <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
-                      {selectedRequest.adminNotes}
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Budget</label>
+                  <p className="font-bold text-green-600">{selectedRequest.budget}</p>
+                </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-between items-center pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  onClick={() => handleDeleteRequest(selectedRequest.id)}
-                  disabled={actionLoading}
-                  className="flex items-center space-x-2 px-4 py-2 text-red-600 hover:text-red-800 disabled:opacity-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Elimina</span>
-                </button>
-
-                <div className="flex space-x-3">
-                  {selectedRequest.status === 'pending' && (
-                    <>
-                      <button
-                        onClick={() => handleUpdateStatus(selectedRequest.id, 'rejected', 'Richiesta rifiutata dall\'admin')}
-                        disabled={actionLoading}
-                        className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-                      >
-                        <XCircle className="h-4 w-4" />
-                        <span>Rifiuta</span>
-                      </button>
-                      <button
-                        onClick={() => handleUpdateStatus(selectedRequest.id, 'approved', 'Richiesta approvata e abbonamento attivato')}
-                        disabled={actionLoading}
-                        className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>Approva</span>
-                      </button>
-                    </>
-                  )}
-                  
-                  {selectedRequest.status === 'approved' && (
-                    <button
-                      onClick={() => handleUpdateStatus(selectedRequest.id, 'completed', 'Pagamento completato')}
-                      disabled={actionLoading}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      <Check className="h-4 w-4" />
-                      <span>Completa</span>
-                    </button>
-                  )}
-                </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-500">Obiettivi</label>
+                <p>{selectedRequest.goals}</p>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium text-gray-500">Perché Premium</label>
+                <p>{selectedRequest.whyPremium}</p>
               </div>
             </div>
           </div>

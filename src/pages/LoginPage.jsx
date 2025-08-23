@@ -184,7 +184,7 @@ const LoginPage = () => {
 
             <div className="flex items-center justify-between">
               <Link
-                to="/register"
+                to="/signup"
                 className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500"
               >
                 Non hai un account? Registrati

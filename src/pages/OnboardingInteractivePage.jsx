@@ -415,7 +415,7 @@ const OnboardingInteractivePage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 pt-16">
+      <div className="flex-1 flex items-center justify-center px-6 py-12 pt-16 pb-24">
         <div className="max-w-4xl w-full mx-auto">
           {/* Welcome Message for Day 1 */}
           {currentDay === 1 && settings.welcomeMessage && (
@@ -608,34 +608,6 @@ const OnboardingInteractivePage = () => {
         </div>
       </div>
 
-      {/* Menu Bottom - SOLO per Onboarding */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black/90 backdrop-blur-sm border-t border-white/10 z-50">
-        <div className="flex justify-around items-center py-3 px-4">
-          <button
-            onClick={() => navigate('/exercises')}
-            className="flex flex-col items-center space-y-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <Home className="h-5 w-5" />
-            <span className="text-xs font-medium">Home</span>
-          </button>
-          
-          <button
-            onClick={() => navigate('/profile')}
-            className="flex flex-col items-center space-y-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <User className="h-5 w-5" />
-            <span className="text-xs font-medium">Profilo</span>
-          </button>
-          
-          <button
-            onClick={() => navigate('/premium')}
-            className="flex flex-col items-center space-y-1 p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <Crown className="h-5 w-5" />
-            <span className="text-xs font-medium">Premium</span>
-          </button>
-        </div>
-      </div>
 
       <style jsx>{`
         @keyframes fade-in {

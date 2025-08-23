@@ -1,66 +1,48 @@
 import { loadStripe } from '@stripe/stripe-js';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
-// Inizializza Stripe (sostituisci con la tua publishable key)
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51234567890abcdef');
+// Stripe publishable key
+const STRIPE_PUBLISHABLE_KEY = 'pk_live_51MitiEHzDfbjshJt8mgvYDWl4ThGswqtYXL4NmSeNKgo9GWc2psHXmMXErby9K00Tfdpb8qC0xAM8MLyr7gLISkx00P9JfLs6d';
 
-// Inizializza Firebase Functions
-const functions = getFunctions();
+// Cache per Stripe
+let stripePromise = null;
 
-// Funzione per creare una sessione di checkout
+// Inizializza Stripe
+const getStripePromise = () => {
+  if (!stripePromise) {
+    stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
+    console.log('✅ Stripe inizializzato');
+  }
+  return stripePromise;
+};
+
+// Funzione per creare una sessione di checkout direttamente con Stripe
 export const createCheckoutSession = async (planId, billingPeriod) => {
   try {
-    const createCheckout = httpsCallable(functions, 'createCheckoutSession');
+    console.log('💳 Creating direct Stripe checkout for:', { planId, billingPeriod });
     
-    const result = await createCheckout({
-      planId,
-      billingPeriod,
-      origin: window.location.origin
-    });
-
-    const { sessionId } = result.data;
-    const stripe = await stripePromise;
+    // Per ora facciamo un redirect semplice a Stripe con payment links
+    // Determina l'URL basato sul periodo di fatturazione
+    let checkoutUrl;
     
-    // Reindirizza a Stripe Checkout
-    const { error } = await stripe.redirectToCheckout({
-      sessionId: sessionId
-    });
-
-    if (error) {
-      throw new Error(error.message);
+    if (billingPeriod === 'monthly') {
+      // Payment link per €19/mese
+      checkoutUrl = 'https://buy.stripe.com/00wcN5bxJ5u43eM49A7Vm00';
+    } else {
+      // Payment link per €149/anno  
+      checkoutUrl = 'https://buy.stripe.com/cNifZhcBN4q002A8pQ7Vm01';
     }
+    
+    // Redirect diretto al payment link
+    console.log('🔗 Redirecting to Stripe payment link:', checkoutUrl);
+    window.location.href = checkoutUrl;
+    
   } catch (error) {
     console.error('Error creating checkout session:', error);
     throw error;
   }
 };
 
-// Funzione per ottenere informazioni sulla subscription
-export const getSubscriptionInfo = async () => {
-  try {
-    const getSubInfo = httpsCallable(functions, 'getSubscriptionInfo');
-    const result = await getSubInfo();
-    return result.data;
-  } catch (error) {
-    console.error('Error getting subscription info:', error);
-    throw error;
-  }
-};
-
-// Funzione per cancellare una subscription
-export const cancelSubscription = async () => {
-  try {
-    const cancelSub = httpsCallable(functions, 'cancelSubscription');
-    const result = await cancelSub();
-    return result.data;
-  } catch (error) {
-    console.error('Error cancelling subscription:', error);
-    throw error;
-  }
-};
-
+// Export della funzione principale
 export default {
-  createCheckoutSession,
-  getSubscriptionInfo,
-  cancelSubscription
+  createCheckoutSession
 };

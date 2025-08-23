@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pulisci LocalStorage - Test Registrazione</title>
+</head>
+<body>
+    <h1>Test Registrazione - Pulizia LocalStorage</h1>
+    <button onclick="clearStorage()">Pulisci LocalStorage</button>
+    <button onclick="showStorage()">Mostra LocalStorage</button>
+    <pre id="output"></pre>
+
+    <script>
+        function clearStorage() {
+            localStorage.clear();
+            document.getElementById('output').textContent = 'LocalStorage pulito!';
+        }
+
+        function showStorage() {
+            const storage = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                storage[key] = localStorage.getItem(key);
+            }
+            document.getElementById('output').textContent = JSON.stringify(storage, null, 2);
+        }
+
+        // Mostra storage all'avvio
+        showStorage();
+    </script>
+</body>
+</html>

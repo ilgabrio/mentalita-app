@@ -8,6 +8,7 @@ import {
   Trophy,
   Award,
   Users,
+  User,
   Podcast,
   Mail,
   Star,
@@ -18,12 +19,17 @@ import {
   ArrowLeft,
   CreditCard,
   Book,
-  GraduationCap
+  GraduationCap,
+  Send,
+  ClipboardCheck,
+  Database,
+  Wand2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 // Import admin components (these will be created next)
 import ExerciseManager from './content/ExerciseManager';
+import ExerciseGenerator from './content/ExerciseGenerator';
 import ArticleManager from './content/ArticleManager';
 import VideoManager from './VideoManager';
 import YouTubeVideoManager from './content/YouTubeVideoManager';
@@ -39,16 +45,22 @@ import NewsletterSender from './newsletter/NewsletterSender';
 import PremiumRequestsManager from './premium/PremiumRequestsManager';
 import PaymentSessionsView from './premium/PaymentSessionsView';
 import PremiumPlansManager from './premium/PremiumPlansManager';
+import PremiumQuestionnaireManager from './premium/PremiumQuestionnaireManager';
 import SiteSettingsManager from './settings/SiteSettingsManager';
 import QuestionnaireTemplatesManager from './settings/QuestionnaireTemplatesManager';
+import QuestionnaireAssignmentsManager from './settings/QuestionnaireAssignmentsManager';
+import CustomQuestionnaireResponsesManager from './settings/CustomQuestionnaireResponsesManager';
 import WelcomePageManager from './settings/WelcomePageManager';
-import OnboardingSettingsManager from './settings/OnboardingSettingsManager';
 import StripeSettingsManager from './settings/StripeSettingsManager';
 import UserManager from './UserManager';
+import UserProfilesManager from './users/UserProfilesManager';
 import VideoDebugPage from './VideoDebugPage';
+import DatabaseTestPage from './DatabaseTestPage';
 import OnboardingExercisesCategorizer from './OnboardingExercisesCategorizer';
 import EbookManager from './content/EbookManager';
 import CourseManager from './content/CourseManager';
+import AdminNotifications from './AdminNotifications';
+import AllResponsesViewer from './AllResponsesViewer';
 
 const AdminDashboard = () => {
   const { userProfile, isAdmin } = useAuth();
@@ -79,6 +91,7 @@ const AdminDashboard = () => {
       icon: BookOpen,
       items: [
         { id: 'exercises', name: 'Esercizi', icon: Trophy },
+        { id: 'exercise-generator', name: 'Generatore Esercizi', icon: Wand2 },
         { id: 'articles', name: 'Articoli', icon: FileText },
         { id: 'videos', name: 'Video (Legacy)', icon: Play },
         { id: 'youtube-videos', name: 'Video YouTube', icon: Play },
@@ -117,11 +130,21 @@ const AdminDashboard = () => {
       ]
     },
     {
+      id: 'users-section',
+      name: 'Utenti',
+      icon: Users,
+      items: [
+        { id: 'user-profiles', name: 'Profili Completi', icon: User },
+        { id: 'users', name: 'Gestione Utenti', icon: Users },
+      ]
+    },
+    {
       id: 'premium',
       name: 'Premium & Pagamenti',
       icon: DollarSign,
       items: [
         { id: 'premium-requests', name: 'Richieste Premium', icon: Crown },
+        { id: 'premium-questionnaire', name: 'Questionario Premium', icon: FileText },
         { id: 'payment-sessions', name: 'Sessioni Pagamento', icon: DollarSign },
         { id: 'premium-plans', name: 'Piani Premium', icon: Star },
         { id: 'stripe-settings', name: 'Configurazione Stripe', icon: CreditCard },
@@ -133,6 +156,7 @@ const AdminDashboard = () => {
       icon: Users,
       items: [
         { id: 'user-management', name: 'Utenti Registrati', icon: Users },
+        { id: 'all-responses', name: '📊 TUTTE le Risposte', icon: Database },
       ]
     },
     {
@@ -141,8 +165,10 @@ const AdminDashboard = () => {
       icon: Settings,
       items: [
         { id: 'site-settings', name: 'Impostazioni Sito', icon: Settings },
-        { id: 'onboarding-flow', name: 'Flusso Onboarding', icon: BookOpen },
-        { id: 'questionnaires', name: 'Questionari', icon: FileText },
+        { id: 'questionnaires', name: 'Template Questionari', icon: FileText },
+        { id: 'questionnaire-assignments', name: 'Assegnazioni Questionari', icon: Send },
+        { id: 'custom-responses', name: 'Risposte Personalizzate', icon: ClipboardCheck },
+        { id: 'database-test', name: '🧪 Test Database', icon: Database },
         { id: 'welcome-page', name: 'Welcome Page', icon: Star },
         { id: 'video-debug', name: '🔍 Debug Video', icon: Play },
         { id: 'onboarding-categorizer', name: '🏷️ Categorizza Onboarding', icon: Trophy },
@@ -154,6 +180,8 @@ const AdminDashboard = () => {
     switch (activeSection) {
       case 'exercises':
         return <ExerciseManager />;
+      case 'exercise-generator':
+        return <ExerciseGenerator />;
       case 'articles':
         return <ArticleManager />;
       case 'videos':
@@ -182,8 +210,14 @@ const AdminDashboard = () => {
         return <NewsletterSubscribersManager />;
       case 'send-newsletter':
         return <NewsletterSender />;
+      case 'user-profiles':
+        return <UserProfilesManager />;
+      case 'users':
+        return <UserManager />;
       case 'premium-requests':
         return <PremiumRequestsManager />;
+      case 'premium-questionnaire':
+        return <PremiumQuestionnaireManager />;
       case 'payment-sessions':
         return <PaymentSessionsView />;
       case 'premium-plans':
@@ -192,10 +226,14 @@ const AdminDashboard = () => {
         return <StripeSettingsManager />;
       case 'site-settings':
         return <SiteSettingsManager />;
-      case 'onboarding-flow':
-        return <OnboardingSettingsManager />;
       case 'questionnaires':
         return <QuestionnaireTemplatesManager />;
+      case 'questionnaire-assignments':
+        return <QuestionnaireAssignmentsManager />;
+      case 'custom-responses':
+        return <CustomQuestionnaireResponsesManager />;
+      case 'database-test':
+        return <DatabaseTestPage />;
       case 'welcome-page':
         return <WelcomePageManager />;
       case 'video-debug':
@@ -204,31 +242,36 @@ const AdminDashboard = () => {
         return <OnboardingExercisesCategorizer />;
       case 'user-management':
         return <UserManager />;
+      case 'all-responses':
+        return <AllResponsesViewer />;
       default:
         return (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-              Dashboard Amministrativa
-            </h2>
-            <div className="text-center py-8">
-              <Crown className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                Benvenuto, {userProfile?.name || userProfile?.email?.split('@')[0] || 'Admin'}!
-              </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Seleziona una sezione dal menu per iniziare a gestire l'applicazione.
-              </p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
-                {menuSections.map(section => (
-                  <div key={section.id} className="text-center">
-                    <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-lg mb-2">
-                      <section.icon className="h-8 w-8 text-blue-600 dark:text-blue-400 mx-auto" />
+          <div className="space-y-6">
+            <AdminNotifications onSectionChange={setActiveSection} />
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+                Dashboard Amministrativa
+              </h2>
+              <div className="text-center py-8">
+                <Crown className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  Benvenuto, {userProfile?.name || userProfile?.email?.split('@')[0] || 'Admin'}!
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">
+                  Seleziona una sezione dal menu per iniziare a gestire l'applicazione.
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto">
+                  {menuSections.map(section => (
+                    <div key={section.id} className="text-center">
+                      <div className="bg-blue-100 dark:bg-blue-900/30 p-4 rounded-lg mb-2">
+                        <section.icon className="h-8 w-8 text-blue-600 dark:text-blue-400 mx-auto" />
+                      </div>
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-white">
+                        {section.name}
+                      </h4>
                     </div>
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                      {section.name}
-                    </h4>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>

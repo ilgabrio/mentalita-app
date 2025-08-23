@@ -35,21 +35,45 @@ const UserDashboard = () => {
   const [userProgress, setUserProgress] = useState(null);
   const [completedExercises, setCompletedExercises] = useState([]);
   const [motivationalTip, setMotivationalTip] = useState(null);
+  const [weeklyNews, setWeeklyNews] = useState({
+    exercises: [],
+    articles: [],
+    videos: [],
+    questionnaires: []
+  });
   const [loading, setLoading] = useState(true);
+  const [showPremiumApprovalNotice, setShowPremiumApprovalNotice] = useState(false);
+  const [showChampionWelcome, setShowChampionWelcome] = useState(false);
   const navigate = useNavigate();
+  
+  // Check if user is Champion
+  const isChampion = localStorage.getItem('championBadge') === 'true';
 
   useEffect(() => {
     if (currentUser) {
       fetchDashboardData();
+      checkPremiumApprovalStatus();
     }
-  }, [currentUser]);
+  }, [currentUser, userProfile]);
 
   // Logica di redirect rimossa - ora gestita dal ProtectedRoute
+
+  const checkPremiumApprovalStatus = async () => {
+    if (!currentUser || !userProfile) return;
+    
+    // Check if user has been approved for Premium but hasn't paid yet
+    if (userProfile.premiumRequestStatus === 'approved_pending_payment' && !userProfile.isPremium) {
+      setShowPremiumApprovalNotice(true);
+    }
+  };
 
   const fetchDashboardData = async () => {
     try {
       console.log('🏠 UserDashboard: Inizio caricamento dati...');
       setLoading(true);
+
+      // Initialize exercisesData as empty array in case of failure
+      let exercisesData = [];
 
       // Fetch published exercises ordered by order
       console.log('📋 Caricamento esercizi...');
@@ -61,7 +85,7 @@ const UserDashboard = () => {
         );
         
         const exercisesSnapshot = await getDocs(exercisesQuery);
-        const exercisesData = exercisesSnapshot.docs.map(doc => ({
+        exercisesData = exercisesSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
@@ -70,6 +94,7 @@ const UserDashboard = () => {
       } catch (exerciseError) {
         console.error('❌ Errore caricamento esercizi:', exerciseError);
         // Continua con gli altri dati anche se gli esercizi falliscono
+        exercisesData = []; // Assicurati che sia definita
       }
 
       // Fetch user progress
@@ -115,11 +140,101 @@ const UserDashboard = () => {
         console.error('❌ Errore caricamento tips:', tipsError);
       }
 
+      // Fetch weekly news for Champions
+      if (isChampion) {
+        console.log('👑 Caricamento novità settimanali per Campione...');
+        await fetchWeeklyNews();
+      }
+
       console.log('🏠 UserDashboard: Caricamento completato');
     } catch (error) {
       console.error('❌ Errore generale dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWeeklyNews = async () => {
+    try {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      
+      const newsData = {
+        exercises: [],
+        articles: [],
+        videos: [],
+        questionnaires: []
+      };
+
+      // Fetch new exercises
+      try {
+        const exercisesQuery = query(
+          collection(db, 'exercises'),
+          where('createdAt', '>=', weekAgo),
+          where('isPublished', '==', true),
+          orderBy('createdAt', 'desc')
+        );
+        const exercisesSnapshot = await getDocs(exercisesQuery);
+        newsData.exercises = exercisesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.log('No new exercises or missing index');
+      }
+
+      // Fetch new articles
+      try {
+        const articlesQuery = query(
+          collection(db, 'articles'),
+          where('createdAt', '>=', weekAgo),
+          orderBy('createdAt', 'desc')
+        );
+        const articlesSnapshot = await getDocs(articlesQuery);
+        newsData.articles = articlesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.log('No new articles or missing index');
+      }
+
+      // Fetch new videos
+      try {
+        const videosQuery = query(
+          collection(db, 'videos'),
+          where('createdAt', '>=', weekAgo),
+          orderBy('createdAt', 'desc')
+        );
+        const videosSnapshot = await getDocs(videosQuery);
+        newsData.videos = videosSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.log('No new videos or missing index');
+      }
+
+      // Fetch new questionnaires
+      try {
+        const questionnairesQuery = query(
+          collection(db, 'questionnaireTemplates'),
+          where('createdAt', '>=', weekAgo),
+          orderBy('createdAt', 'desc')
+        );
+        const questionnairesSnapshot = await getDocs(questionnairesQuery);
+        newsData.questionnaires = questionnairesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+      } catch (error) {
+        console.log('No new questionnaires or missing index');
+      }
+
+      setWeeklyNews(newsData);
+      console.log('✅ Novità settimanali caricate:', newsData);
+    } catch (error) {
+      console.error('❌ Errore caricamento novità:', error);
     }
   };
 
@@ -271,67 +386,198 @@ const UserDashboard = () => {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Ciao, {userProfile?.name || userProfile?.displayName || 'Atleta'}!
+            Ciao, {userProfile?.name || userProfile?.displayName || 'Atleta'}! {isChampion ? '🏆' : ''}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Benvenuto nella tua dashboard di allenamento mentale
+            {isChampion 
+              ? 'Benvenuto nella tua dashboard da Campione! Hai sbloccato tutti i contenuti 🚀'
+              : 'Benvenuto nella tua dashboard di allenamento mentale'
+            }
           </p>
         </div>
 
-        {/* Premium Banner */}
-        {!userProfile?.isPremium && (
-          <div className="bg-gradient-to-r from-amber-500 to-yellow-600 rounded-xl shadow-lg p-6 mb-8 text-white relative overflow-hidden">
+        {/* Welcome Message for New Champions */}
+        {isChampion && !localStorage.getItem('championWelcomeShown') && showChampionWelcome !== false && (
+          <div className="bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 rounded-xl shadow-lg p-6 mb-8 text-white relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full transform translate-x-16 -translate-y-16"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full transform -translate-x-12 translate-y-12"></div>
             
             <div className="relative z-10">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-3">
-                    <Crown className="h-8 w-8 text-white" />
-                    <h2 className="text-2xl font-bold">Sblocca il Premium</h2>
-                  </div>
-                  <p className="text-amber-100 mb-4 text-lg">
-                    Accedi a coaching personalizzato, contenuti esclusivi e supporto individuale per massimizzare le tue performance mentali.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <Crown className="h-8 w-8 text-white" />
+                <h2 className="text-2xl font-bold">🎉 Congratulazioni, Campione!</h2>
+              </div>
+              
+              <div className="space-y-3">
+                <p className="text-yellow-100 text-lg">
+                  Hai completato l'onboarding e ottenuto il <strong>Badge da Campione</strong>!
+                </p>
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                  <h3 className="font-bold mb-2">🔓 Ora hai accesso a:</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                     <div className="flex items-center space-x-2">
-                      <Zap className="h-5 w-5 text-yellow-200" />
-                      <span className="text-amber-100">Coaching 1-on-1 personalizzato</span>
+                      <Brain className="h-4 w-4" />
+                      <span>Tutti gli esercizi mentali</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Sparkles className="h-5 w-5 text-yellow-200" />
-                      <span className="text-amber-100">Contenuti esclusivi avanzati</span>
+                      <PlayCircle className="h-4 w-4" />
+                      <span>Video tutorial avanzati</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Brain className="h-5 w-5 text-yellow-200" />
-                      <span className="text-amber-100">Analisi approfondite personalizzate</span>
+                      <BookOpen className="h-4 w-4" />
+                      <span>Articoli di approfondimento</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <Target className="h-5 w-5 text-yellow-200" />
-                      <span className="text-amber-100">Piani di training su misura</span>
+                      <Target className="h-4 w-4" />
+                      <span>Questionari personalizzati</span>
                     </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => {
+                    localStorage.setItem('championWelcomeShown', 'true');
+                    setShowChampionWelcome(false);
+                  }}
+                  className="mt-4 bg-white text-orange-600 px-4 py-2 rounded-lg font-semibold hover:bg-orange-50 transition-all"
+                >
+                  Inizia l'avventura! 🚀
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Weekly News for Champions */}
+        {isChampion && (
+          <div className="bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl shadow-lg p-6 mb-8 text-white relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full transform translate-x-16 -translate-y-16"></div>
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full transform -translate-x-12 translate-y-12"></div>
+            
+            <div className="relative z-10">
+              <div className="flex items-center space-x-3 mb-4">
+                <Sparkles className="h-8 w-8 text-white" />
+                <h2 className="text-2xl font-bold">Novità dell'Ultima Settimana</h2>
               </div>
               
-              <div className="flex flex-col sm:flex-row gap-3">
-                <button
-                  onClick={() => navigate('/questionnaire/premium')}
-                  className="flex items-center justify-center space-x-2 bg-white text-amber-600 px-6 py-3 rounded-lg font-semibold hover:bg-amber-50 transition-colors"
-                >
-                  <Crown className="h-5 w-5" />
-                  <span>Richiedi Premium</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => navigate('/premium')}
-                  className="flex items-center justify-center space-x-2 border-2 border-white text-white px-6 py-3 rounded-lg font-semibold hover:bg-white/10 transition-colors"
-                >
-                  <span>Scopri di più</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* New Exercises */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Brain className="h-6 w-6 text-cyan-200" />
+                    <span className="text-2xl font-bold">{weeklyNews.exercises.length}</span>
+                  </div>
+                  <p className="text-cyan-100 text-sm font-medium">Nuovi Esercizi</p>
+                  {weeklyNews.exercises.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-cyan-200 truncate">
+                        {weeklyNews.exercises[0].title}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* New Articles */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <BookOpen className="h-6 w-6 text-cyan-200" />
+                    <span className="text-2xl font-bold">{weeklyNews.articles.length}</span>
+                  </div>
+                  <p className="text-cyan-100 text-sm font-medium">Nuovi Articoli</p>
+                  {weeklyNews.articles.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-cyan-200 truncate">
+                        {weeklyNews.articles[0].title}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* New Videos */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <PlayCircle className="h-6 w-6 text-cyan-200" />
+                    <span className="text-2xl font-bold">{weeklyNews.videos.length}</span>
+                  </div>
+                  <p className="text-cyan-100 text-sm font-medium">Nuovi Video</p>
+                  {weeklyNews.videos.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-cyan-200 truncate">
+                        {weeklyNews.videos[0].title}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* New Questionnaires */}
+                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <Target className="h-6 w-6 text-cyan-200" />
+                    <span className="text-2xl font-bold">{weeklyNews.questionnaires.length}</span>
+                  </div>
+                  <p className="text-cyan-100 text-sm font-medium">Nuovi Questionari</p>
+                  {weeklyNews.questionnaires.length > 0 && (
+                    <div className="mt-2">
+                      <p className="text-xs text-cyan-200 truncate">
+                        {weeklyNews.questionnaires[0].title}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Show message if no new content */}
+              {weeklyNews.exercises.length === 0 && 
+               weeklyNews.articles.length === 0 && 
+               weeklyNews.videos.length === 0 && 
+               weeklyNews.questionnaires.length === 0 && (
+                <div className="mt-4 text-center">
+                  <p className="text-cyan-100">
+                    Non ci sono novità questa settimana. Torna presto per scoprire nuovi contenuti! 🚀
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Premium Approval Notice */}
+        {showPremiumApprovalNotice && (
+          <div className="mb-8">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg shadow-lg p-6 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 opacity-10">
+                <Crown className="h-32 w-32" />
+              </div>
+              <div className="relative z-10">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center">
+                    <div className="bg-white/20 backdrop-blur-sm p-3 rounded-lg">
+                      <CheckCircle className="h-6 w-6 text-white" />
+                    </div>
+                    <div className="ml-4">
+                      <h3 className="text-xl font-bold text-white mb-1">🎉 Congratulazioni!</h3>
+                      <p className="text-green-100 text-sm mb-2">La tua richiesta Premium è stata <strong>APPROVATA</strong></p>
+                      <p className="text-xs text-green-200">Approvato il {userProfile?.premiumApprovedAt?.toDate?.()?.toLocaleDateString('it-IT') || 'oggi'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowPremiumApprovalNotice(false)}
+                    className="text-white/60 hover:text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="mt-4 pt-4 border-t border-green-400/30">
+                  <p className="text-white text-sm mb-3">
+                    💳 <strong>Prossimo passo:</strong> Completa il pagamento per attivare immediatamente tutti i benefici Premium
+                  </p>
+                  <button
+                    onClick={() => navigate('/premium?approved=true')}
+                    className="inline-flex items-center space-x-2 px-4 py-2 bg-white text-green-600 rounded-lg font-semibold hover:bg-green-50 transition-all transform hover:scale-105"
+                  >
+                    <span>💎 Completa Pagamento Premium</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -339,6 +585,7 @@ const UserDashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Exercises Completed Card */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-lg">
@@ -408,7 +655,7 @@ const UserDashboard = () => {
               Esercizi Disponibili
             </h2>
             <div className="flex items-center space-x-3">
-              {!userProfile?.isPremium && (
+              {!userProfile?.isPremium && !isChampion && (
                 <button
                   onClick={() => navigate('/premium')}
                   className="flex items-center space-x-1 px-3 py-1 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm font-medium"
@@ -439,7 +686,7 @@ const UserDashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {exercises.slice(0, 6).map((exercise) => {
+              {exercises.map((exercise) => {
                 const isCompleted = getExerciseStatus(exercise.id);
                 
                 return (
@@ -552,7 +799,7 @@ const UserDashboard = () => {
           )}
 
           {/* Premium CTA for exercises */}
-          {!userProfile?.isPremium && exercises.length > 0 && (
+          {!userProfile?.isPremium && !isChampion && exercises.length > 0 && (
             <div className="mt-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">

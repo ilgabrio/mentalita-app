@@ -10,8 +10,10 @@ const ProtectedRoute = ({ children, requireAuth = true, skipOnboardingCheck = fa
   const [completedOnboardingExercises, setCompletedOnboardingExercises] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Check localStorage flags
-  const questionnaireCompleted = localStorage.getItem('initialQuestionnaireCompleted');
+  // Check database first, then localStorage as fallback
+  const questionnaireCompleted = userProfile?.initialQuestionnaireCompleted === true || 
+                                (userProfile?.initialQuestionnaireCompleted === undefined && 
+                                 localStorage.getItem('initialQuestionnaireCompleted') === 'true');
   const welcomeShown = localStorage.getItem('welcomeShown');
   const onboardingCompleted = localStorage.getItem('onboardingCompleted');
   const championBadge = localStorage.getItem('championBadge');
@@ -122,6 +124,8 @@ import RegisterPage from './pages/RegisterPage';
 import InitialQuestionnairePage from './pages/InitialQuestionnairePage';
 import WelcomePage from './pages/WelcomePage';
 import OnboardingExercisesPage from './pages/OnboardingExercisesPage';
+import OnboardingInteractivePage from './pages/OnboardingInteractivePage';
+import ExerciseIntroPage from './pages/ExerciseIntroPage';
 import OnboardingQuestionsPage from './pages/OnboardingQuestionsPage';
 import ChampionUnlockPage from './pages/ChampionUnlockPage';
 import HomePage from './pages/HomePage';
@@ -129,7 +133,9 @@ import ProfilePage from './pages/ProfilePage';
 import ExercisesPage from './pages/ExercisesPage';
 // import ExerciseDetailPage from './pages/ExerciseDetailPage'; // Non esiste
 import ExercisePracticePage from './pages/ExercisePracticePage';
-import PremiumPage from './pages/PremiumPage';
+// import PremiumPage from './pages/PremiumPage';
+import PremiumPageFixed from './pages/PremiumPageFixed';
+import PremiumSuccessPage from './pages/PremiumSuccessPage';
 import VideosPage from './pages/VideosPage';
 import AudioPage from './pages/AudioPage';
 import AudioDetailPage from './pages/AudioDetailPage';
@@ -170,6 +176,22 @@ function AppContent() {
           <ProtectedRoute skipOnboardingCheck={true}>
             <MainLayout>
               <OnboardingExercisesPage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/onboarding-interactive" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <OnboardingInteractivePage />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/exercise-intro/:id" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <ExerciseIntroPage />
             </MainLayout>
           </ProtectedRoute>
         } />
@@ -255,7 +277,15 @@ function AppContent() {
         <Route path="/premium" element={
           <ProtectedRoute skipOnboardingCheck={true}>
             <MainLayout>
-              <PremiumPage />
+              <PremiumPageFixed />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/premium/success" element={
+          <ProtectedRoute skipOnboardingCheck={true}>
+            <MainLayout>
+              <PremiumSuccessPage />
             </MainLayout>
           </ProtectedRoute>
         } />
@@ -325,14 +355,7 @@ function AppContent() {
           </ProtectedRoute>
         } />
 
-        {/* Route per esercizi detail */}
-        <Route path="/exercises/:id" element={
-          <ProtectedRoute skipOnboardingCheck={true}>
-            <MainLayout>
-              <ExerciseDetail />
-            </MainLayout>
-          </ProtectedRoute>
-        } />
+        {/* Route per esercizi detail - RIMOSSO: usa /exercise-intro/:id */}
 
         {/* Redirect unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />

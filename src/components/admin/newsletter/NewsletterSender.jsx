@@ -5,7 +5,10 @@ import {
   where, 
   getDocs,
   addDoc,
-  orderBy 
+  orderBy,
+  doc,
+  getDoc,
+  setDoc 
 } from 'firebase/firestore';
 import { db } from '../../../config/firebase';
 import emailjs from '@emailjs/browser';
@@ -24,10 +27,10 @@ import {
   Calendar
 } from 'lucide-react';
 
-// Configurazione EmailJS - Da configurare con i tuoi dati
-const EMAILJS_SERVICE_ID = 'your_service_id'; // Sostituisci con il tuo service ID
-const EMAILJS_TEMPLATE_ID = 'your_template_id'; // Sostituisci con il tuo template ID
-const EMAILJS_PUBLIC_KEY = 'your_public_key'; // Sostituisci con la tua public key
+// Configurazione EmailJS - Legge dalle variabili d'ambiente
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'your_service_id';
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'your_template_id'; 
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'your_public_key';
 
 const NewsletterSender = () => {
   const [subscribers, setSubscribers] = useState([]);
@@ -55,11 +58,50 @@ const NewsletterSender = () => {
   useEffect(() => {
     fetchSubscribers();
     fetchHistory();
-    // Inizializza EmailJS
-    if (emailConfig.publicKey && emailConfig.publicKey !== 'your_public_key') {
-      emailjs.init(emailConfig.publicKey);
-    }
+    loadEmailConfig();
   }, []);
+
+  const loadEmailConfig = async () => {
+    try {
+      // Prima prova a caricare dal database
+      const docRef = doc(db, 'siteSettings', 'emailConfig');
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const config = docSnap.data();
+        setEmailConfig({
+          serviceId: config.serviceId || EMAILJS_SERVICE_ID,
+          templateId: config.templateId || EMAILJS_TEMPLATE_ID,
+          publicKey: config.publicKey || EMAILJS_PUBLIC_KEY
+        });
+        
+        // Inizializza EmailJS con la configurazione dal database
+        if (config.publicKey && config.publicKey !== 'your_public_key') {
+          emailjs.init(config.publicKey);
+        }
+      } else {
+        // Fallback: prova a caricare dal localStorage per retrocompatibilità
+        const savedConfig = localStorage.getItem('emailjs_config');
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig);
+          setEmailConfig(config);
+          
+          // Salva nel database per uso futuro
+          await setDoc(doc(db, 'siteSettings', 'emailConfig'), config);
+          
+          // Inizializza EmailJS
+          if (config.publicKey && config.publicKey !== 'your_public_key') {
+            emailjs.init(config.publicKey);
+          }
+          
+          // Rimuovi dal localStorage dopo aver migrato al database
+          localStorage.removeItem('emailjs_config');
+        }
+      }
+    } catch (error) {
+      console.error('Error loading EmailJS config:', error);
+    }
+  };
 
   const fetchSubscribers = async () => {
     try {
@@ -233,12 +275,20 @@ const NewsletterSender = () => {
     }
   };
 
-  const saveEmailConfig = () => {
-    // In produzione, salveresti questa configurazione in modo sicuro
-    localStorage.setItem('emailjs_config', JSON.stringify(emailConfig));
-    emailjs.init(emailConfig.publicKey);
-    setConfigModalOpen(false);
-    alert('Configurazione salvata!');
+  const saveEmailConfig = async () => {
+    try {
+      // Salva la configurazione nel database Firestore
+      await setDoc(doc(db, 'siteSettings', 'emailConfig'), emailConfig);
+      
+      // Inizializza EmailJS con la nuova configurazione
+      emailjs.init(emailConfig.publicKey);
+      
+      setConfigModalOpen(false);
+      alert('Configurazione salvata nel database!');
+    } catch (error) {
+      console.error('Error saving EmailJS config:', error);
+      alert('Errore nel salvare la configurazione: ' + error.message);
+    }
   };
 
   const formatDate = (date) => {

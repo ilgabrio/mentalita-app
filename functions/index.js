@@ -1,8 +1,53 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const stripe = require('stripe')(functions.config().stripe.secret_key);
 
 admin.initializeApp();
+
+// Funzione per caricare la configurazione Stripe dal database
+const getStripeConfig = async () => {
+  try {
+    const doc = await admin.firestore().collection('siteSettings').doc('stripeConfig').get();
+    if (doc.exists) {
+      const config = doc.data();
+      console.log('🔑 Stripe Functions: Config caricata dal database');
+      return config;
+    } else {
+      console.warn('⚠️ Stripe Functions: Config non trovata nel database, usando functions.config()');
+      // Fallback a functions.config() se non trovata
+      return {
+        secretKey: functions.config().stripe?.secret_key,
+        webhookSecret: functions.config().stripe?.webhook_secret
+      };
+    }
+  } catch (error) {
+    console.error('❌ Errore caricamento Stripe config dal database:', error);
+    // Fallback a functions.config()
+    return {
+      secretKey: functions.config().stripe?.secret_key,
+      webhookSecret: functions.config().stripe?.webhook_secret
+    };
+  }
+};
+
+// Cache per la configurazione Stripe
+let stripeConfig = null;
+let stripe = null;
+
+// Inizializza Stripe con configurazione dal database
+const getStripe = async () => {
+  if (!stripe) {
+    if (!stripeConfig) {
+      stripeConfig = await getStripeConfig();
+    }
+    if (stripeConfig.secretKey) {
+      stripe = require('stripe')(stripeConfig.secretKey);
+      console.log('✅ Stripe Functions inizializzato');
+    } else {
+      throw new Error('Stripe secret key non configurata');
+    }
+  }
+  return stripe;
+};
 
 // Creazione sessione di checkout per i pagamenti
 exports.createCheckoutSession = functions.https.onCall(async (data, context) => {
@@ -34,7 +79,8 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
     const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
     
     // Crea la sessione di checkout Stripe
-    const session = await stripe.checkout.sessions.create({
+    const stripeInstance = await getStripe();
+    const session = await stripeInstance.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
@@ -76,12 +122,18 @@ exports.createCheckoutSession = functions.https.onCall(async (data, context) => 
 // Webhook per gestire gli eventi Stripe
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
   const sig = req.headers['stripe-signature'];
-  const endpointSecret = functions.config().stripe.webhook_secret;
+  
+  // Carica config dal database
+  if (!stripeConfig) {
+    stripeConfig = await getStripeConfig();
+  }
+  const endpointSecret = stripeConfig.webhookSecret;
+  const stripeInstance = await getStripe();
 
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
+    event = stripeInstance.webhooks.constructEvent(req.rawBody, sig, endpointSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -122,7 +174,8 @@ async function handleCheckoutSessionCompleted(session) {
     const { userId, planId, billingPeriod } = session.metadata;
     
     // Recupera i dettagli della subscription da Stripe
-    const subscription = await stripe.subscriptions.retrieve(session.subscription);
+    const stripeInstance = await getStripe();
+    const subscription = await stripeInstance.subscriptions.retrieve(session.subscription);
     
     // Salva la subscription nel database
     await admin.firestore().collection('subscriptions').add({
@@ -320,7 +373,8 @@ exports.cancelSubscription = functions.https.onCall(async (data, context) => {
     const subscriptionData = subscriptionDoc.docs[0].data();
     
     // Cancella la subscription su Stripe
-    await stripe.subscriptions.update(subscriptionData.stripeSubscriptionId, {
+    const stripeInstance = await getStripe();
+    await stripeInstance.subscriptions.update(subscriptionData.stripeSubscriptionId, {
       cancel_at_period_end: true
     });
 

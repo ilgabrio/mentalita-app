@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { CheckCircle, Lock, Play, Star, Trophy, Clock } from 'lucide-react';
+import { auth } from '../config/firebase';
+import { signOut } from 'firebase/auth';
+import { CheckCircle, Lock, Play, Star, Trophy, Clock, LogOut } from 'lucide-react';
 
 const OnboardingExercisesPage = () => {
   const navigate = useNavigate();
@@ -33,7 +35,7 @@ const OnboardingExercisesPage = () => {
     try {
       console.log('🔍 Caricamento esercizi onboarding...');
       
-      // Fetch TUTTI gli esercizi validi e prendo i primi 7
+      // Fetch esercizi con category="onboarding"
       const exercisesQuery = collection(db, 'exercises');
       const exercisesSnapshot = await getDocs(exercisesQuery);
       let allExercises = exercisesSnapshot.docs.map(doc => ({
@@ -41,25 +43,41 @@ const OnboardingExercisesPage = () => {
         ...doc.data()
       }));
 
-      // Filtro solo esercizi validi con elementi
+      console.log('🎯 Tutti gli esercizi:', allExercises.length);
+
+      // Filtro SOLO esercizi con category="onboarding"
       let exercises = allExercises.filter(ex => {
         return ex.title && 
                ex.description && 
                ex.elements && 
                Array.isArray(ex.elements) && 
-               ex.elements.length > 0;
+               ex.elements.length > 0 &&
+               ex.category === 'onboarding' &&
+               ex.isPublished === true; // Solo quelli pubblicati
       });
 
-      // Ordina per createdAt o title
+      console.log('🎯 Esercizi onboarding filtrati:', exercises.length, 'trovati');
+
+      // Ordina per order se presente, altrimenti per createdAt o title
       exercises.sort((a, b) => {
+        // Prima priorità: order field
+        if (a.order !== undefined && b.order !== undefined) {
+          return a.order - b.order;
+        }
+        // Seconda priorità: createdAt
         if (a.createdAt && b.createdAt) {
           return a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime();
         }
+        // Ultima priorità: title
         return (a.title || '').localeCompare(b.title || '');
       });
 
-      // Prendo solo i primi 7 per l'onboarding
-      exercises = exercises.slice(0, 7);
+      // Se abbiamo meno di 7 esercizi onboarding, prendi comunque quelli che ci sono
+      // Se ne abbiamo più di 7, prendi i primi 7
+      if (exercises.length > 7) {
+        exercises = exercises.slice(0, 7);
+        console.log('📋 Limitati ai primi 7 esercizi onboarding');
+      }
       
       console.log('✅ Esercizi onboarding trovati:', exercises);
       setOnboardingExercises(exercises);
@@ -90,7 +108,17 @@ const OnboardingExercisesPage = () => {
   };
 
   const handleExerciseClick = (exercise) => {
-    navigate(`/exercises/${exercise.id}/practice?from=onboarding`);
+    navigate(`/exercise-intro/${exercise.id}`);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      localStorage.clear();
+      navigate('/login');
+    } catch (error) {
+      console.error('Errore nel logout:', error);
+    }
   };
 
   // Conta quanti esercizi sono stati completati in totale (non solo quelli dell'onboarding)
@@ -124,6 +152,17 @@ const OnboardingExercisesPage = () => {
         
         {/* Header */}
         <div className="text-center mb-8">
+          {/* Logout button in top right */}
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Esci</span>
+            </button>
+          </div>
+          
           <div className="mb-4">
             <Trophy className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
             <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">

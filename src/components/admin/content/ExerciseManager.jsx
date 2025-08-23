@@ -35,6 +35,7 @@ import VideoSelector from '../VideoSelector';
 const ExerciseManager = () => {
   const [exercises, setExercises] = useState([]);
   const [videos, setVideos] = useState([]);
+  const [audios, setAudios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -59,7 +60,8 @@ const ExerciseManager = () => {
     instructions: [],
     selectedVideos: [],
     coverImage: '',
-    claim: ''
+    claim: '',
+    audioExplanation: null // Audio spiegazione esercizio
   });
 
   const categories = [
@@ -78,6 +80,7 @@ const ExerciseManager = () => {
   useEffect(() => {
     fetchExercises();
     fetchVideos();
+    fetchAudios();
   }, []);
 
   const convertVideoIdsToObjects = (videoIds) => {
@@ -103,14 +106,15 @@ const ExerciseManager = () => {
     try {
       console.log('🎥 ExerciseManager: Fetching videos for exercise selection...');
       
-      // Try appVideos first
-      let q = query(collection(db, 'appVideos'));
-      let snapshot = await getDocs(q);
+      // Use videos collection (MAIN collection - appVideos is deprecated)
+      const q = query(collection(db, 'videos'));
+      const snapshot = await getDocs(q);
       const videosData = [];
       
       snapshot.forEach((doc) => {
         const data = doc.data();
-        if (data.isPublished !== false) {
+        // videos collection uses isActive instead of isPublished
+        if (data.isActive !== false) {
           videosData.push({
             id: doc.id,
             ...data
@@ -118,29 +122,57 @@ const ExerciseManager = () => {
         }
       });
 
-      // If no results from appVideos, try videos collection
-      if (videosData.length === 0) {
-        try {
-          q = query(collection(db, 'videos'));
-          snapshot = await getDocs(q);
-          snapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.isPublished !== false) {
-              videosData.push({
-                id: doc.id,
-                ...data
-              });
-            }
-          });
-        } catch (error) {
-          console.log('🎥 ExerciseManager: No videos collection found');
-        }
-      }
-
       console.log(`🎥 ExerciseManager: Loaded ${videosData.length} videos`);
       setVideos(videosData);
     } catch (error) {
       console.error('🎥 ExerciseManager: Error fetching videos:', error);
+    }
+  };
+
+  const fetchAudios = async () => {
+    try {
+      console.log('🎵 ExerciseManager: Fetching audios for exercise explanation...');
+      
+      const q = query(
+        collection(db, 'audio'),
+        where('isPublished', '==', true),
+        orderBy('title', 'asc')
+      );
+      const snapshot = await getDocs(q);
+      const audiosData = [];
+      
+      snapshot.forEach((doc) => {
+        audiosData.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      console.log(`🎵 ExerciseManager: Loaded ${audiosData.length} audios`);
+      setAudios(audiosData);
+    } catch (error) {
+      console.error('🎵 ExerciseManager: Error fetching audios:', error);
+      // Fallback senza orderBy
+      try {
+        const q = query(
+          collection(db, 'audio'),
+          where('isPublished', '==', true)
+        );
+        const snapshot = await getDocs(q);
+        const audiosData = [];
+        
+        snapshot.forEach((doc) => {
+          audiosData.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+
+        console.log(`🎵 ExerciseManager: Loaded ${audiosData.length} audios (fallback)`);
+        setAudios(audiosData.sort((a, b) => (a.title || '').localeCompare(b.title || '')));
+      } catch (fallbackError) {
+        console.error('🎵 ExerciseManager: Fallback fetch also failed:', fallbackError);
+      }
     }
   };
 
@@ -214,7 +246,8 @@ const ExerciseManager = () => {
         instructions: exercise.instructions || [],
         selectedVideos: convertVideoIdsToObjects(exercise.selectedVideos || []),
         coverImage: exercise.coverImage || '',
-        claim: exercise.claim || ''
+        claim: exercise.claim || '',
+        audioExplanation: exercise.audioExplanation || null
       });
     } else {
       setEditingExercise(null);
@@ -232,7 +265,8 @@ const ExerciseManager = () => {
         instructions: [],
         selectedVideos: [],
         coverImage: '',
-        claim: ''
+        claim: '',
+        audioExplanation: null
       });
     }
     setShowModal(true);
@@ -722,6 +756,50 @@ const ExerciseManager = () => {
                   placeholder="Seleziona uno o più video..."
                   multiple={true}
                 />
+
+                {/* Audio Selector for Explanation */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    🎵 Audio Spiegazione Esercizio
+                  </label>
+                  <select
+                    value={formData.audioExplanation?.id || ''}
+                    onChange={(e) => {
+                      const selectedAudio = audios.find(audio => audio.id === e.target.value);
+                      setFormData({ 
+                        ...formData, 
+                        audioExplanation: selectedAudio || null 
+                      });
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Nessun audio di spiegazione</option>
+                    {audios.map(audio => (
+                      <option key={audio.id} value={audio.id}>
+                        {audio.title} ({audio.duration || 'N/A'})
+                      </option>
+                    ))}
+                  </select>
+                  {formData.audioExplanation && (
+                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        ✓ Audio selezionato: <strong>{formData.audioExplanation.title}</strong>
+                      </p>
+                      {formData.audioExplanation.audioUrl && (
+                        <audio 
+                          controls 
+                          className="mt-2 w-full"
+                          src={formData.audioExplanation.audioUrl}
+                        >
+                          Il tuo browser non supporta l'audio.
+                        </audio>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Gli atleti sentiranno questo audio prima di iniziare l'esercizio
+                  </p>
+                </div>
               </div>
             </div>
 

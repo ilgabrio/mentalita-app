@@ -11,8 +11,15 @@ const SideNav = () => {
   // Check if onboarding is completed OR if user has Champion badge
   const championBadge = localStorage.getItem('championBadge') === 'true';
   const isOnboardingCompleted = championBadge || // Champion badge bypassa tutto
-                               userProfile?.onboardingCompleted === true || 
-                               localStorage.getItem('onboardingCompleted') === 'true';
+                               userProfile?.onboardingCompleted === true;
+  
+  // Debug logging per verificare lo stato
+  console.log('🔍 SideNav Debug:', {
+    championBadge,
+    onboardingCompletedDB: userProfile?.onboardingCompleted,
+    isOnboardingCompleted,
+    userProfile: userProfile ? 'presente' : 'assente'
+  });
   
   const allNavItems = [
     { path: '/', icon: Home, label: 'Home', key: 'home' },
@@ -27,10 +34,13 @@ const SideNav = () => {
   // Filter nav items based on onboarding completion
   const navItems = allNavItems.filter(item => {
     if (item.requiresOnboarding && !isOnboardingCompleted) {
-      return false; // Hide Video, Audio, and Articles if onboarding not completed
+      console.log('🚫 Nascondo voce menu:', item.label, '- Onboarding non completato');
+      return false; // Hide Video, Audio, Articles, Ebook, Corsi if onboarding not completed
     }
     return true;
   });
+  
+  console.log('📋 Menu items visibili:', navItems.map(item => item.label));
 
   const toggleSidebar = () => {
     setIsOpen(!isOpen);
