@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - Mentalità</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+        
+        .retry-btn {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+        
+        .retry-btn:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-2px);
+        }
+        
+        .tips {
+            margin-top: 30px;
+            text-align: left;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 15px;
+            padding: 20px;
+        }
+        
+        .tips h3 {
+            margin-bottom: 15px;
+            color: #FFD700;
+        }
+        
+        .tips ul {
+            list-style: none;
+        }
+        
+        .tips li {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .tips li:before {
+            content: '💡';
+            position: absolute;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🧠⚡</div>
+        <h1>Sei Offline</h1>
+        <p>Non riesco a connettermi a Internet. Alcuni contenuti potrebbero non essere aggiornati, ma puoi comunque utilizzare le funzioni principali dell'app.</p>
+        
+        <button class="retry-btn" onclick="location.reload()">🔄 Riprova</button>
+        <button class="retry-btn" onclick="history.back()">← Indietro</button>
+        
+        <div class="tips">
+            <h3>💪 Allenamento Mentale Offline</h3>
+            <ul>
+                <li>Pratica la visualizzazione e la respirazione</li>
+                <li>Ripensa agli esercizi completati di recente</li>
+                <li>Concentrati sui tuoi obiettivi sportivi</li>
+                <li>Usa questo momento per riflettere sui tuoi progressi</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Auto-retry connection every 30 seconds
+        let retryCount = 0;
+        const maxRetries = 10;
+        
+        function checkConnection() {
+            if (retryCount < maxRetries) {
+                retryCount++;
+                setTimeout(() => {
+                    if (navigator.onLine) {
+                        location.reload();
+                    } else {
+                        checkConnection();
+                    }
+                }, 30000);
+            }
+        }
+        
+        // Listen for online event
+        window.addEventListener('online', () => {
+            location.reload();
+        });
+        
+        // Start checking connection
+        checkConnection();
+    </script>
+</body>
+</html>

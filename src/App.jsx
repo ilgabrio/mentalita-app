@@ -14,7 +14,12 @@ const ProtectedRoute = ({ children, requireAuth = true, skipOnboardingCheck = fa
   const questionnaireCompleted = userProfile?.initialQuestionnaireCompleted === true || 
                                 (userProfile?.initialQuestionnaireCompleted === undefined && 
                                  localStorage.getItem('initialQuestionnaireCompleted') === 'true');
-  const welcomeShown = localStorage.getItem('welcomeShown');
+  
+  // Check welcome shown from DATABASE first, then localStorage
+  const welcomeShown = userProfile?.welcomeShown === true || 
+                      (userProfile?.welcomeShown === undefined && 
+                       localStorage.getItem('welcomeShown') === 'true');
+  
   const onboardingCompleted = localStorage.getItem('onboardingCompleted');
   const championBadge = localStorage.getItem('championBadge');
 
@@ -118,43 +123,60 @@ const ProtectedRoute = ({ children, requireAuth = true, skipOnboardingCheck = fa
   return children;
 };
 
-// Import all pages
+// Core imports (always loaded)
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import InitialQuestionnairePage from './pages/InitialQuestionnairePage';
-import WelcomePage from './pages/WelcomePage';
-import OnboardingExercisesPage from './pages/OnboardingExercisesPage';
-import OnboardingInteractivePage from './pages/OnboardingInteractivePage';
-import ExerciseIntroPage from './pages/ExerciseIntroPage';
-import OnboardingQuestionsPage from './pages/OnboardingQuestionsPage';
-import ChampionUnlockPage from './pages/ChampionUnlockPage';
-import HomePage from './pages/HomePage';
-import ProfilePage from './pages/ProfilePage';
-import ExercisesPage from './pages/ExercisesPage';
-// import ExerciseDetailPage from './pages/ExerciseDetailPage'; // Non esiste
-import ExercisePracticePage from './pages/ExercisePracticePage';
-// import PremiumPage from './pages/PremiumPage';
-import PremiumPageFixed from './pages/PremiumPageFixed';
-import PremiumSuccessPage from './pages/PremiumSuccessPage';
-import VideosPage from './pages/VideosPage';
-import AudioPage from './pages/AudioPage';
-import AudioDetailPage from './pages/AudioDetailPage';
-import ArticlesPage from './pages/ArticlesPage';
-import ArticleReaderPage from './pages/ArticleReaderPage';
-import VideoDetailPage from './pages/VideoDetailPage';
-import EbooksPage from './pages/EbooksPage';
-import CoursesPage from './pages/CoursesPage';
 import MainLayout from './components/MainLayout';
-import ExerciseDetail from './components/ExerciseDetail';
-import AdminPage from './pages/AdminPage';
-import AdminAudioImages from './pages/AdminAudioImages';
-import AdminArticleImages from './pages/AdminArticleImages';
-import AdminVideoImages from './pages/AdminVideoImages';
+
+// Lazy imports with React.lazy for code splitting
+const InitialQuestionnairePage = React.lazy(() => import('./pages/InitialQuestionnairePage'));
+const WelcomePage = React.lazy(() => import('./pages/WelcomePage'));
+const OnboardingExercisesPage = React.lazy(() => import('./pages/OnboardingExercisesPage'));
+const OnboardingInteractivePage = React.lazy(() => import('./pages/OnboardingInteractivePage'));
+const ExerciseIntroPage = React.lazy(() => import('./pages/ExerciseIntroPage'));
+const OnboardingQuestionsPage = React.lazy(() => import('./pages/OnboardingQuestionsPage'));
+const ChampionUnlockPage = React.lazy(() => import('./pages/ChampionUnlockPage'));
+
+// User app pages (lazy loaded)
+const HomePage = React.lazy(() => import('./pages/HomePage'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
+const ExercisesPage = React.lazy(() => import('./pages/ExercisesPage'));
+const ExercisePracticePage = React.lazy(() => import('./pages/ExercisePracticePage'));
+const PremiumPageFixed = React.lazy(() => import('./pages/PremiumPageFixed'));
+const PremiumSuccessPage = React.lazy(() => import('./pages/PremiumSuccessPage'));
+
+// Content pages (lazy loaded)
+const VideosPage = React.lazy(() => import('./pages/VideosPage'));
+const AudioPage = React.lazy(() => import('./pages/AudioPage'));
+const AudioDetailPage = React.lazy(() => import('./pages/AudioDetailPage'));
+const ArticlesPage = React.lazy(() => import('./pages/ArticlesPage'));
+const ArticleReaderPage = React.lazy(() => import('./pages/ArticleReaderPage'));
+const VideoDetailPage = React.lazy(() => import('./pages/VideoDetailPage'));
+const EbooksPage = React.lazy(() => import('./pages/EbooksPage'));
+const CoursesPage = React.lazy(() => import('./pages/CoursesPage'));
+const ExerciseDetail = React.lazy(() => import('./components/ExerciseDetail'));
+
+// Admin pages (heavy lazy loaded)
+const AdminPage = React.lazy(() => import('./pages/AdminPage'));
+const AdminAudioImages = React.lazy(() => import('./pages/AdminAudioImages'));
+const AdminArticleImages = React.lazy(() => import('./pages/AdminArticleImages'));
+const AdminVideoImages = React.lazy(() => import('./pages/AdminVideoImages'));
+
+// Loading component for Suspense fallback
+const PageLoader = () => (
+  <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p className="text-gray-600 dark:text-gray-400">Caricamento...</p>
+    </div>
+  </div>
+);
 
 function AppContent() {
   return (
     <Router>
-      <Routes>
+      <React.Suspense fallback={<PageLoader />}>
+        <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<RegisterPage />} />
@@ -175,7 +197,9 @@ function AppContent() {
         <Route path="/onboarding-exercises" element={
           <ProtectedRoute skipOnboardingCheck={true}>
             <MainLayout>
-              <OnboardingExercisesPage />
+              <React.Suspense fallback={<PageLoader />}>
+                <OnboardingExercisesPage />
+              </React.Suspense>
             </MainLayout>
           </ProtectedRoute>
         } />
@@ -360,6 +384,7 @@ function AppContent() {
         {/* Redirect unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </React.Suspense>
     </Router>
   );
 }

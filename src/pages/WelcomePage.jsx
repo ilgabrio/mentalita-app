@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -142,12 +142,23 @@ const WelcomePage = () => {
         email: currentUser?.email
       });
       
-      // Mark welcome as shown
+      // Mark welcome as shown both in localStorage AND database
       localStorage.setItem('welcomeShown', 'true');
       console.log('✅ localStorage welcomeShown set to true');
       
-      // Check if user has completed any exercises
+      // Save to database for persistence across devices
       if (currentUser) {
+        try {
+          await updateDoc(doc(db, 'users', currentUser.uid), {
+            welcomeShown: true,
+            welcomeShownAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+          console.log('✅ Welcome shown saved to database');
+        } catch (error) {
+          console.error('Error saving welcome shown to database:', error);
+        }
+        
         console.log('👤 Checking user exercise history...');
         const exercisesQuery = query(
           collection(db, 'exerciseResponses'),
